@@ -15,6 +15,12 @@ from PIL import Image
 from .coco import index_coco
 from .common import project_root, sha256_file, utc_now, write_json
 from .inventory import IMAGE_SUFFIXES
+from .manual_filter import (
+    EXPLICIT_ADDITIONAL,
+    REFERENCE_IMAGES,
+    VAPE_AREA_THRESHOLD,
+    manual_exclusion_reason,
+)
 
 TARGETS = {"Vape", "vape", "ecigarette"}
 EXCLUDED_KAGGLE = {
@@ -132,8 +138,22 @@ def build(root: Path, output: Path) -> dict:
         for image in images(source_root):
             split = image.relative_to(source_root).parts[0]
             label = image.parent.parent / "labels" / f"{image.stem}.txt"
+            # Explicit image exclusions also work if the downloaded label is missing.
+            reason = manual_exclusion_reason(source, image.name, "", names)
+            if reason:
+                exclusions.append({"source_image": str(image.relative_to(root)),
+                                   "source_annotation": str(label.relative_to(root)),
+                                   "reason": reason})
+                continue
             if not label.exists():
                 raise ValueError(f"Missing label file (not assumed negative): {image}")
+            text = label.read_text()
+            reason = manual_exclusion_reason(source, image.name, text, names)
+            if reason:
+                exclusions.append({"source_image": str(image.relative_to(root)),
+                                   "source_annotation": str(label.relative_to(root)),
+                                   "reason": reason})
+                continue
             origin = image.name.split(".rf.")[0]
             if source == "kaggle_test_manual":
                 original = origin.removesuffix("_jpg")
@@ -148,7 +168,6 @@ def build(root: Path, output: Path) -> dict:
                 group = f"kaggle_test/{original}"
             else:
                 group = f"{source}/{origin}"
-            text = label.read_text()
             converted_polygons[source] += sum(
                 len(line.split()) != 5 and names[int(line.split()[0])] in TARGETS
                 for line in text.splitlines() if line.strip()
@@ -199,6 +218,22 @@ def build(root: Path, output: Path) -> dict:
         "origin_groups": len({r["origin_group"] for r in records}),
         "remaining_exact_duplicate_groups": duplicate_groups,
         "original_kaggle_test_images_omitted": len(kaggle_test_names),
+        "manual_removal_policy": {
+            "implementation": "leukerbad.data.manual_filter.manual_exclusion_reason",
+            "requires_local_exclusion_ledger": False,
+            "primary_cigarette_only": True,
+            "primary_vape_area_threshold_inclusive": VAPE_AREA_THRESHOLD,
+            "threshold_rationale": (
+                "Manual dataset-quality decision: the user judged three reference pictures "
+                "unsuitable. Their largest normalized vape box area defines the inclusive "
+                "cutoff; it is not statistically fitted or model-derived."
+            ),
+            "area_metric": "normalized box area or polygon shoelace area",
+            "reference_images": REFERENCE_IMAGES,
+            "explicit_additional_filenames": EXPLICIT_ADDITIONAL,
+            "excluded_kaggle_train_filenames": sorted(EXCLUDED_KAGGLE),
+            "applied_this_build_by_reason": dict(Counter(e["reason"] for e in exclusions)),
+        },
     }
     (output / "images").mkdir(parents=True)
     (output / "labels").mkdir()
@@ -220,7 +255,10 @@ def build(root: Path, output: Path) -> dict:
                       f"{c['negative_images']} | {c['target_instances']} |")
     report += ["", "## Policy and lineage", "",
                "- Only `Vape`, `vape`, and `ecigarette` boxes survive; all map to `0: vape`.",
-               "- All negative images are retained with empty label files.",
+               "- Historical source-specific image removals are applied before label filtering.",
+               "- Primary cigarette-only and small-vape images, and three marked additional images, are excluded.",
+               "- The same code rules serve raw cleanup and export; no local exclusion ledger is required.",
+               "- All other negative images are retained with empty label files.",
                "- Original unlabeled Kaggle test copies are omitted; manual labels take precedence.",
                "- Two Kaggle train images are excluded for the previously flagged out-of-bounds boxes.",
                "- The extra Kaggle-export photo is omitted because it is byte-identical to a manual photo.",

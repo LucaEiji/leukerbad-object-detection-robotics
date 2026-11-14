@@ -14,6 +14,8 @@ REFERENCE_IMAGES = [
     "Screenshot-2024-04-03-190859_jpg.rf.6d7ae93453d906307f33d6e8ddc2be60.jpg",
     "Screenshot-2024-04-03-191628_jpg.rf.3c5d9507e3f816304ca463ab3fd25a38.jpg",
 ]
+# Manual quality decision: these reference pictures were judged unsuitable by the user.
+# The largest reference box area defines an inclusive cutoff, not a model-derived threshold.
 REFERENCE_AREAS = [0.046875 * 0.0640625, 0.0484375 * 0.059375, 0.0359375 * 0.028125]
 VAPE_AREA_THRESHOLD = max(REFERENCE_AREAS)
 EXPLICIT_ADDITIONAL = [
@@ -35,6 +37,30 @@ def _annotation_area(fields: list[str]) -> float | None:
     return None
 
 
+def manual_exclusion_reason(
+    source: str, filename: str, text: str, classes: list[str]
+) -> str | None:
+    """Reproduce historical raw cleanup without requiring a local exclusion ledger.
+
+    These source-specific image removals precede target-label filtering. Other
+    non-target-only images remain eligible as intentional negative examples.
+    """
+    if source == "roboflow_additional" and filename in EXPLICIT_ADDITIONAL:
+        return "user_explicitly_marked_misannotated"
+    if source != "roboflow_primary":
+        return None
+    annotations = [line.split() for line in text.splitlines() if line.strip()]
+    names = [classes[int(fields[0])].lower() for fields in annotations]
+    if names and all(name == "cigarette" for name in names):
+        return "primary_cigarette_only"
+    for fields, name in zip(annotations, names):
+        if name == "vape":
+            area = _annotation_area(fields)
+            if area is not None and area <= VAPE_AREA_THRESHOLD:
+                return "primary_vape_area_at_or_below_reference_threshold"
+    return None
+
+
 def _remove_pair(image_path: Path, reason: str, records: list[dict]) -> None:
     label_path = image_path.parent.parent / "labels" / f"{image_path.stem}.txt"
     record = {
@@ -52,25 +78,18 @@ def _remove_pair(image_path: Path, reason: str, records: list[dict]) -> None:
 def filter_primary(records: list[dict]) -> None:
     raw_dir = data_root() / "raw" / "roboflow_primary"
     classes = _read_classes(raw_dir)
-    class_names = {index: name.lower() for index, name in enumerate(classes)}
     for image_path in sorted(raw_dir.glob("*/images/*")):
         if not image_path.is_file():
             continue
         label_path = image_path.parent.parent / "labels" / f"{image_path.stem}.txt"
         if not label_path.exists():
             continue
-        annotations = [line.split() for line in label_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-        names = [class_names.get(int(fields[0]), "unknown") for fields in annotations if fields and fields[0].isdigit()]
-        if names and all(name == "cigarette" for name in names):
-            _remove_pair(image_path, "primary_cigarette_only", records)
-            continue
-        small_vape = False
-        for fields, name in zip(annotations, names):
-            if name == "vape" and _annotation_area(fields) is not None and _annotation_area(fields) <= VAPE_AREA_THRESHOLD:
-                small_vape = True
-                break
-        if small_vape:
-            _remove_pair(image_path, "primary_vape_area_at_or_below_reference_threshold", records)
+        reason = manual_exclusion_reason(
+            "roboflow_primary", image_path.name,
+            label_path.read_text(encoding="utf-8"), classes,
+        )
+        if reason:
+            _remove_pair(image_path, reason, records)
 
 
 def filter_explicit_additional(records: list[dict]) -> None:
@@ -78,7 +97,9 @@ def filter_explicit_additional(records: list[dict]) -> None:
     for filename in EXPLICIT_ADDITIONAL:
         image_path = raw_dir / filename
         if image_path.exists():
-            _remove_pair(image_path, "user_explicitly_marked_misannotated", records)
+            reason = manual_exclusion_reason("roboflow_additional", filename, "", [])
+            if reason:
+                _remove_pair(image_path, reason, records)
 
 
 def main() -> None:

@@ -29,7 +29,11 @@ counts come from the latest inventory and annotation audit.
 - Removed every image whose annotations contained only `cigarette`.
 - Removed every image containing a `vape` annotation whose normalized area was less than or equal to `0.0030029296875`.
 - For a YOLO box, normalized area is `width * height`.
+- For a YOLO polygon, normalized area is its shoelace area, before conversion to an enclosing box.
 - The threshold is the largest normalized box area among the three user-provided reference images.
+- This value reflects a manual dataset-quality decision: the user considered those reference
+  pictures unsuitable and selected them as examples to exclude. The cutoff reproduces that
+  judgment; it is not a statistically fitted or model-derived quality threshold.
 - The threshold was inclusive so all three reference images were excluded.
 - The image and matching label file were removed together.
 - Removed: 3,054 cigarette-only pairs and 135 small-vape pairs.
@@ -77,3 +81,17 @@ curated manifest. The original COCO category remains unchanged in the downloaded
 - `public_data/reports/review_status.md`: review-gallery counts
 
 Duplicate candidates were flagged only; no duplicate-based deletion was performed.
+
+## Reproducible standardized-export cleanup
+
+`vapeguard-standardize` applies the historical primary and additional-source image exclusions
+using the same `manual_exclusion_reason` code as `vapeguard-filter`. It works on fresh downloads
+without `manifests/exclusions.jsonl`; filenames, reference threshold, and class-based rules are
+part of the code. It also retains the two explicit Kaggle train image exclusions implemented
+in `standardize.py`. Standardization excludes images from the export without deleting raw files.
+
+The historical 3,192 raw removals (3,054 cigarette-only, 135 small-vape, three marked additional)
+are a prior-run count. New export summaries report only exclusions found in their current input,
+alongside the reproducible rule definitions. The historical primary cigarette-only removal is
+a source-specific exception to negative retention. Other non-target-only and empty-label images
+are retained as negatives; non-target annotation rows are discarded rather than reviewed.

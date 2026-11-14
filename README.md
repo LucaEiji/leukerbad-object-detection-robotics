@@ -126,6 +126,19 @@ Every negative image is retained with an empty label file. Retained source polyg
 enclosing detection boxes, and Kaggle COCO boxes are converted to normalized YOLO boxes.
 Original source files remain unchanged.
 
+The export also reproduces the historical raw cleanup directly from code, even on a fresh
+download with no local exclusion ledger. The rules shared with `vapeguard-filter` exclude
+primary-source cigarette-only images, primary images containing a vape whose normalized
+annotation area is at or below `0.0030029296875`, and the three explicitly marked additional-source
+images. Area uses width times height for boxes and shoelace area for polygons, before conversion
+to enclosing boxes. The cutoff is a manual dataset-quality decision: the user judged three
+reference pictures unsuitable, and the largest vape box area among those pictures was chosen
+as the inclusive threshold. It is not a statistically fitted or model-derived quality threshold.
+These source-specific image exclusions precede label filtering; all other
+images without retained target boxes remain intentional negatives. The two Kaggle train
+exclusions remain active. Export summaries record the policy and exclusions applied to the
+input files present on that run; previously deleted raw files are not counted as new exclusions.
+
 Only the manually labeled Kaggle test images enter the export. The two previously flagged
 Kaggle train images and the exact duplicate manual photo in the Kaggle test export are excluded.
 Final train/validation/test assignments are deferred; original split metadata and origin groups
