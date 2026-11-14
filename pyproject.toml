@@ -12,6 +12,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+data = [
+    "kaggle>=1.7.4",
+    "Pillow>=10.0.0",
+    "python-dotenv>=1.0.0",
+    "PyYAML>=6.0.0",
+    "requests>=2.31.0",
+    "roboflow>=1.1.50",
+]
 ml = [
     "ultralytics>=8.3.0",
 ]
@@ -25,10 +33,23 @@ dev = [
 
 [project.scripts]
 leukerbad-detect = "leukerbad.cli:main"
+vapeguard-download = "leukerbad.data.download:main"
+vapeguard-inspect = "leukerbad.data.inspect_sources:main"
+vapeguard-inventory = "leukerbad.data.inventory:main"
+vapeguard-curate = "leukerbad.data.curate:main"
+vapeguard-audit = "leukerbad.data.audit:main"
+vapeguard-duplicates = "leukerbad.data.duplicates:main"
+vapeguard-gallery = "leukerbad.data.gallery:main"
+vapeguard-filter = "leukerbad.data.manual_filter:main"
+vapeguard-openimages = "leukerbad.data.openimages:main"
+vapeguard-standardize = "leukerbad.data.standardize:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/leukerbad"]

@@ -14,11 +14,29 @@ venv/
 # uv
 .uv/
 
-# ML artifacts and local data
-data/
-datasets/
-models/
-runs/
+# Local datasets and generated data — do not commit
+/data/
+/datasets/
+/manual_data/
+/public_data/raw/
+/public_data/curated/
+/public_data/exports/
+/public_data/annotations/
+/public_data/manifests/
+
+# Generated dataset review materials
+/public_data/reports/review_gallery/
+/public_data/reports/*.json
+/public_data/reports/annotation_audit.md
+/public_data/reports/dataset_sources.md
+/public_data/reports/duplicates.md
+/public_data/reports/review_status.md
+/public_data/reports/standardization.md
+/public_data/reports/standardization_validation.md
+
+# ML artifacts
+/models/
+/runs/
 *.pt
 *.onnx
 *.weights

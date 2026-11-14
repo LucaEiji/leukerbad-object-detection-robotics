@@ -1,0 +1,55 @@
+{
+  "sources": [
+    {
+      "id": "roboflow_primary",
+      "kind": "roboflow",
+      "workspace": "takoyati",
+      "project": "cigarette-vape-detection",
+      "version": 10,
+      "url": "https://universe.roboflow.com/takoyati/cigarette-vape-detection",
+      "raw_dir": "public_data/raw/roboflow_primary",
+      "license": "CC BY 4.0",
+      "original_classes": ["cigarette", "vape"],
+      "source_images": 5774,
+      "annotation_format": "YOLOv8 object detection export",
+      "notes": "Roboflow API metadata identifies version 10 as the 5,774-image export. Versions 1, 9, 10, 11, 12, 13, and 14 are available through the API."
+    },
+    {
+      "id": "roboflow_additional_infocommprojecttft",
+      "kind": "roboflow",
+      "workspace": "infocommprojecttft",
+      "project": "vape-dataset-gknul",
+      "version": 14,
+      "url": "https://universe.roboflow.com/infocommprojecttft/vape-dataset-gknul",
+      "raw_dir": "public_data/raw/roboflow_additional/infocommprojecttft_vape-dataset-gknul",
+      "license": "CC BY 4.0",
+      "original_classes": ["Vape", "nonVape", "possiblyVape", "notVape"],
+      "source_images": 2209,
+      "annotation_format": "object detection; YOLOv8 export available for version 14",
+      "notes": "Roboflow API metadata verified version 14 with 2,209 images. Version metadata reports three image augmentation versions. License confirmed as CC BY 4.0 by the signed-in Universe page."
+    },
+    {
+      "id": "kaggle_ecigarettes_vs_batteries",
+      "kind": "kaggle",
+      "competition": "e-cigarets-vs-batteries",
+      "url": "https://www.kaggle.com/competitions/e-cigarets-vs-batteries",
+      "raw_dir": "public_data/raw/kaggle",
+      "license": "Competition terms: non-commercial and academic research only",
+      "original_classes": ["battery", "ecigarette"],
+      "source_images": 323,
+      "annotation_format": "COCO bounding boxes in train_annotations.json; test images have no ground-truth annotations",
+      "notes": "Inventory found 323 images, 631 train instances, and 65 unannotated test images. Use only after accepting the competition rules. Do not redistribute the raw data."
+    },
+    {
+      "id": "open_images_v7_negatives",
+      "kind": "open_images",
+      "url": "https://storage.googleapis.com/openimages/web/index.html",
+      "raw_dir": "public_data/raw/open_images_v7_negatives",
+      "license": "CC BY 2.0 per Open Images image metadata; retain each image's license URL and attribution metadata",
+      "original_classes": ["eraser", "pen", "perfume", "spice rack", "tin can", "torch"],
+      "source_images": 600,
+      "annotation_format": "Open Images V7 validation bounding boxes used for selection; no VapeGuard positive labels",
+      "notes": "100 disjoint validation images per requested class. Downloaded as negative examples for the VapeGuard vape detector."
+    }
+  ]
+}
