@@ -1,0 +1,5 @@
+# Keep this archival snapshot self-contained without requiring Git LFS.
+# The files are modest in size and are required by its bundled simulation.
+*.stl -filter -diff -merge -text
+*.mp4 -filter -diff -merge -text
+*.zip -filter -diff -merge -text

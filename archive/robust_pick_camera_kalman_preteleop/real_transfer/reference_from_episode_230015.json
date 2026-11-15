@@ -1,0 +1,72 @@
+{
+  "source_dataset": "data/puff_pilot_20261114_230015",
+  "purpose": "Measured real-robot reference poses extracted from a reviewed demonstration, not an identified sim-to-real mapping",
+  "wrist_offset_degrees": 180,
+  "poses": [
+    {
+      "label": "rest",
+      "timestamp": 0.0,
+      "follower_positions": {
+        "shoulder_pan.pos": -12.967033386230469,
+        "shoulder_lift.pos": -102.19779968261719,
+        "elbow_flex.pos": 93.53845977783203,
+        "wrist_flex.pos": 77.45054626464844,
+        "wrist_roll.pos": -78.989013671875,
+        "gripper.pos": 0.6155951023101807
+      },
+      "label_requires_geometric_validation": true
+    },
+    {
+      "label": "above_object",
+      "timestamp": 4.0,
+      "follower_positions": {
+        "shoulder_pan.pos": -15.95604419708252,
+        "shoulder_lift.pos": -41.098899841308594,
+        "elbow_flex.pos": 51.25274658203125,
+        "wrist_flex.pos": 50.5494499206543,
+        "wrist_roll.pos": -85.14286041259766,
+        "gripper.pos": 9.575922966003418
+      },
+      "label_requires_geometric_validation": true
+    },
+    {
+      "label": "grasp_open",
+      "timestamp": 12.0,
+      "follower_positions": {
+        "shoulder_pan.pos": -11.384614944458008,
+        "shoulder_lift.pos": 4.615384578704834,
+        "elbow_flex.pos": 33.14285659790039,
+        "wrist_flex.pos": 45.80219650268555,
+        "wrist_roll.pos": -167.25274658203125,
+        "gripper.pos": 20.041040420532227
+      },
+      "label_requires_geometric_validation": true
+    },
+    {
+      "label": "grasp_closed",
+      "timestamp": 14.0,
+      "follower_positions": {
+        "shoulder_pan.pos": -11.648351669311523,
+        "shoulder_lift.pos": 11.560439109802246,
+        "elbow_flex.pos": 25.406593322753906,
+        "wrist_flex.pos": 54.41758346557617,
+        "wrist_roll.pos": -167.25274658203125,
+        "gripper.pos": 6.01915168762207
+      },
+      "label_requires_geometric_validation": true
+    },
+    {
+      "label": "lift",
+      "timestamp": 18.0,
+      "follower_positions": {
+        "shoulder_pan.pos": -11.20879077911377,
+        "shoulder_lift.pos": -14.10988998413086,
+        "elbow_flex.pos": 26.901098251342773,
+        "wrist_flex.pos": 65.31867980957031,
+        "wrist_roll.pos": -164.1758270263672,
+        "gripper.pos": 6.01915168762207
+      },
+      "label_requires_geometric_validation": true
+    }
+  ]
+}

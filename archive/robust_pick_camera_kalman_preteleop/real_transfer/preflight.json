@@ -1,0 +1,60 @@
+{
+  "time": "2026-11-15T05:06:17.120959",
+  "simulation_checkpoint_present": true,
+  "calibration_sha256": "3e8680710c2c8f08e929fe453b853e9e943ae5bc31cf19923bef3d7822744ee4",
+  "real_motor_ids": {
+    "shoulder_pan": 1,
+    "shoulder_lift": 2,
+    "elbow_flex": 3,
+    "wrist_flex": 4,
+    "wrist_roll": 5,
+    "gripper": 6
+  },
+  "ready_for_autonomous_real_execution": false,
+  "missing": [
+    "Real/simulation joint-coordinate mapping validated on known poses",
+    "Real object pose in robot coordinates (or a validated fixed test pose)",
+    "Physical pre-grasp, closed-grasp and lift reference poses"
+  ],
+  "calibration_matches_motors": true,
+  "positions": {
+    "shoulder_pan": -9.626373626373626,
+    "shoulder_lift": -101.93406593406593,
+    "elbow_flex": 90.72527472527473,
+    "wrist_flex": 77.62637362637362,
+    "wrist_roll": -83.56043956043956,
+    "gripper": 0.6839945280437756
+  },
+  "motor_status": {
+    "shoulder_pan": {
+      "Torque_Enable": 1,
+      "Present_Temperature": 28,
+      "Present_Voltage": 123
+    },
+    "shoulder_lift": {
+      "Torque_Enable": 1,
+      "Present_Temperature": 28,
+      "Present_Voltage": 122
+    },
+    "elbow_flex": {
+      "Torque_Enable": 1,
+      "Present_Temperature": 28,
+      "Present_Voltage": 123
+    },
+    "wrist_flex": {
+      "Torque_Enable": 1,
+      "Present_Temperature": 28,
+      "Present_Voltage": 123
+    },
+    "wrist_roll": {
+      "Torque_Enable": 1,
+      "Present_Temperature": 29,
+      "Present_Voltage": 122
+    },
+    "gripper": {
+      "Torque_Enable": 1,
+      "Present_Temperature": 31,
+      "Present_Voltage": 123
+    }
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "schema": "local_table_grasp_v1",
+  "units": "mm",
+  "frame": "origin=successful_object_center; +x=robot_right; +y=away_from_base; z=constant",
+  "same_object_height_and_orientation_required": true,
+  "calibration_sha256": "3e8680710c2c8f08e929fe453b853e9e943ae5bc31cf19923bef3d7822744ee4",
+  "points": [
+    {
+      "xy_mm": [
+        0.0,
+        0.0
+      ],
+      "positions": {
+        "shoulder_pan.pos": -11.736263736263735,
+        "shoulder_lift.pos": -0.9230769230769231,
+        "elbow_flex.pos": 39.64835164835165,
+        "wrist_flex.pos": 48.43956043956044,
+        "wrist_roll.pos": -164.6153846153846,
+        "gripper.pos": 4.7879616963064295
+      }
+    },
+    {
+      "xy_mm": [
+        20.0,
+        0.0
+      ],
+      "positions": {
+        "shoulder_pan.pos": -5.934065934065934,
+        "shoulder_lift.pos": 1.7142857142857142,
+        "elbow_flex.pos": 37.27472527472528,
+        "wrist_flex.pos": 49.75824175824176,
+        "wrist_roll.pos": -164.6153846153846,
+        "gripper.pos": 4.7879616963064295
+      }
+    },
+    {
+      "xy_mm": [
+        -20.0,
+        0.0
+      ],
+      "positions": {
+        "shoulder_pan.pos": -17.53846153846154,
+        "shoulder_lift.pos": 0.21978021978021978,
+        "elbow_flex.pos": 38.065934065934066,
+        "wrist_flex.pos": 48.08791208791209,
+        "wrist_roll.pos": -164.6153846153846,
+        "gripper.pos": 4.7879616963064295
+      }
+    },
+    {
+      "xy_mm": [
+        20.0,
+        0.0
+      ],
+      "positions": {
+        "shoulder_pan.pos": -11.12087912087912,
+        "shoulder_lift.pos": 8.659340659340659,
+        "elbow_flex.pos": 27.692307692307693,
+        "wrist_flex.pos": 50.637362637362635,
+        "wrist_roll.pos": -164.6153846153846,
+        "gripper.pos": 4.719562243502052
+      }
+    },
+    {
+      "xy_mm": [
+        0.0,
+        20.0
+      ],
+      "positions": {
+        "shoulder_pan.pos": -6.1098901098901095,
+        "shoulder_lift.pos": 5.4945054945054945,
+        "elbow_flex.pos": 31.12087912087912,
+        "wrist_flex.pos": 55.032967032967036,
+        "wrist_roll.pos": -164.6153846153846,
+        "gripper.pos": 4.7879616963064295
+      }
+    },
+    {
+      "xy_mm": [
+        0.0,
+        -20.0
+      ],
+      "positions": {
+        "shoulder_pan.pos": -12.43956043956044,
+        "shoulder_lift.pos": -2.857142857142857,
+        "elbow_flex.pos": 41.142857142857146,
+        "wrist_flex.pos": 54.59340659340659,
+        "wrist_roll.pos": -164.6153846153846,
+        "gripper.pos": 4.7879616963064295
+      }
+    }
+  ]
+}

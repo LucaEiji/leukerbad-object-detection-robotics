@@ -1,0 +1,17 @@
+{
+  "training_episodes": 8000,
+  "training_seconds": 273.72871362499427,
+  "random_baseline_trials": 100,
+  "random_baseline_successes": 19,
+  "heldout_trials": 200,
+  "heldout_successes": 200,
+  "heldout_success_rate": 1.0,
+  "mean_lift_cm": 9.936138819030065,
+  "limitations": [
+    "Simulation only",
+    "Privileged object position/orientation, not images",
+    "Learned grasp pose; programmed IK approach/close/lift",
+    "Object yaw between -57 and +57 degrees; x/y jitter +/-5 mm",
+    "No real-robot transfer tested"
+  ]
+}

@@ -1,0 +1,144 @@
+{
+  "schema": "local_table_analysis_v1",
+  "source": "/Users/toufan/Documents/ChatGPT/HACKATHON PUFF/lerobot/real_transfer/table_20261115_010604.json",
+  "captures": 11,
+  "averages": [
+    {
+      "xy_mm": [
+        0.0,
+        0.0
+      ],
+      "capture_count": 2,
+      "positions": {
+        "shoulder_pan.pos": -11.648351648351648,
+        "shoulder_lift.pos": 9.010989010989011,
+        "elbow_flex.pos": 25.450549450549453,
+        "wrist_flex.pos": 60.395604395604394,
+        "wrist_roll.pos": -164.6153846153846,
+        "gripper.pos": 4.753761969904241
+      },
+      "range_deg_or_gripper_points": {
+        "shoulder_pan.pos": 0.1758241758241752,
+        "shoulder_lift.pos": 19.86813186813187,
+        "elbow_flex.pos": 28.395604395604394,
+        "wrist_flex.pos": 23.912087912087912,
+        "wrist_roll.pos": 0.0,
+        "gripper.pos": 0.06839945280437743
+      }
+    },
+    {
+      "xy_mm": [
+        20.0,
+        0.0
+      ],
+      "capture_count": 3,
+      "positions": {
+        "shoulder_pan.pos": -6.051282051282051,
+        "shoulder_lift.pos": 6.95970695970696,
+        "elbow_flex.pos": 29.479853479853478,
+        "wrist_flex.pos": 56.586080586080584,
+        "wrist_roll.pos": -164.6153846153846,
+        "gripper.pos": 4.76516187870497
+      },
+      "range_deg_or_gripper_points": {
+        "shoulder_pan.pos": 0.1758241758241752,
+        "shoulder_lift.pos": 11.956043956043956,
+        "elbow_flex.pos": 17.230769230769234,
+        "wrist_flex.pos": 15.208791208791204,
+        "wrist_roll.pos": 0.0,
+        "gripper.pos": 0.06839945280437743
+      }
+    },
+    {
+      "xy_mm": [
+        -20.0,
+        0.0
+      ],
+      "capture_count": 2,
+      "positions": {
+        "shoulder_pan.pos": -17.142857142857146,
+        "shoulder_lift.pos": 6.285714285714286,
+        "elbow_flex.pos": 29.53846153846154,
+        "wrist_flex.pos": 55.86813186813187,
+        "wrist_roll.pos": -164.6153846153846,
+        "gripper.pos": 4.753761969904241
+      },
+      "range_deg_or_gripper_points": {
+        "shoulder_pan.pos": 0.791208791208792,
+        "shoulder_lift.pos": 12.131868131868133,
+        "elbow_flex.pos": 17.054945054945055,
+        "wrist_flex.pos": 15.560439560439562,
+        "wrist_roll.pos": 0.0,
+        "gripper.pos": 0.06839945280437743
+      }
+    },
+    {
+      "xy_mm": [
+        0.0,
+        20.0
+      ],
+      "capture_count": 2,
+      "positions": {
+        "shoulder_pan.pos": -11.076923076923077,
+        "shoulder_lift.pos": 13.450549450549449,
+        "elbow_flex.pos": 20.439560439560438,
+        "wrist_flex.pos": 56.92307692307692,
+        "wrist_roll.pos": -164.6153846153846,
+        "gripper.pos": 4.753761969904241
+      },
+      "range_deg_or_gripper_points": {
+        "shoulder_pan.pos": 0.0879120879120876,
+        "shoulder_lift.pos": 9.582417582417582,
+        "elbow_flex.pos": 14.505494505494507,
+        "wrist_flex.pos": 12.571428571428577,
+        "wrist_roll.pos": 0.0,
+        "gripper.pos": 0.06839945280437743
+      }
+    },
+    {
+      "xy_mm": [
+        0.0,
+        -20.0
+      ],
+      "capture_count": 2,
+      "positions": {
+        "shoulder_pan.pos": -12.131868131868131,
+        "shoulder_lift.pos": -1.054945054945055,
+        "elbow_flex.pos": 39.252747252747255,
+        "wrist_flex.pos": 55.73626373626374,
+        "wrist_roll.pos": -164.6153846153846,
+        "gripper.pos": 4.753761969904241
+      },
+      "range_deg_or_gripper_points": {
+        "shoulder_pan.pos": 0.615384615384615,
+        "shoulder_lift.pos": 3.6043956043956045,
+        "elbow_flex.pos": 3.780219780219781,
+        "wrist_flex.pos": 2.2857142857142847,
+        "wrist_roll.pos": 0.0,
+        "gripper.pos": 0.06839945280437743
+      }
+    }
+  ],
+  "full_xy_leave_one_out_max_deg": {
+    "shoulder_pan": 0.6153846153846025,
+    "shoulder_lift": 13.26575465350976,
+    "elbow_flex": 19.428571428571416,
+    "wrist_flex": 16.8773267548778,
+    "wrist_roll": 1.1368683772161603e-13
+  },
+  "full_xy_ready": false,
+  "all_captures_used": true,
+  "video_used": false,
+  "first_lateral_trial": {
+    "kind": "experimental_lateral_rotation_only",
+    "requested_x_mm": 5,
+    "requested_y_mm": 0,
+    "table_source": "/Users/toufan/Documents/ChatGPT/HACKATHON PUFF/lerobot/real_transfer/table_20261115_010604.json",
+    "table_sha256": "7106bd47bea5e979a60cb27eeb349a4d93a3b912dc2096c4a6efb2e47b36c16d",
+    "pan_gain_deg_per_mm": 0.2774114774114774,
+    "pan_delta_deg": 1.387057387057387,
+    "pan_leave_one_out_max_deg": 0.6153846153846025,
+    "physical_accuracy_validated": false,
+    "limitation": "Approximate lateral arc, not Cartesian translation. Depth, jaw orientation and table clearance require operator validation."
+  }
+}

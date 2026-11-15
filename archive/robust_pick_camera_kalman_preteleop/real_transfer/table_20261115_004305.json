@@ -1,0 +1,51 @@
+{
+  "schema": "local_table_grasp_v1",
+  "units": "mm",
+  "frame": "origin=successful_object_center; +x=robot_right; +y=away_from_base; z=constant",
+  "same_object_height_and_orientation_required": true,
+  "calibration_sha256": "3e8680710c2c8f08e929fe453b853e9e943ae5bc31cf19923bef3d7822744ee4",
+  "points": [
+    {
+      "xy_mm": [
+        20.0,
+        0.0
+      ],
+      "positions": {
+        "shoulder_pan.pos": -5.318681318681318,
+        "shoulder_lift.pos": -0.21978021978021978,
+        "elbow_flex.pos": 38.94505494505494,
+        "wrist_flex.pos": 48.79120879120879,
+        "wrist_roll.pos": -161.8901098901099,
+        "gripper.pos": 10.39671682626539
+      }
+    },
+    {
+      "xy_mm": [
+        0.0,
+        0.0
+      ],
+      "positions": {
+        "shoulder_pan.pos": -12.43956043956044,
+        "shoulder_lift.pos": 2.9450549450549453,
+        "elbow_flex.pos": 32.7032967032967,
+        "wrist_flex.pos": 52.747252747252745,
+        "wrist_roll.pos": -162.6813186813187,
+        "gripper.pos": 10.601915184678523
+      }
+    },
+    {
+      "xy_mm": [
+        20.0,
+        0.0
+      ],
+      "positions": {
+        "shoulder_pan.pos": -5.406593406593407,
+        "shoulder_lift.pos": 5.582417582417582,
+        "elbow_flex.pos": 29.802197802197803,
+        "wrist_flex.pos": 55.120879120879124,
+        "wrist_roll.pos": -166.1978021978022,
+        "gripper.pos": 10.601915184678523
+      }
+    }
+  ]
+}

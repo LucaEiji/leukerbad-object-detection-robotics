@@ -1,0 +1,50 @@
+{
+  "schema": "teleop_grasp_pose_v1",
+  "units": "degrees, millimetres",
+  "source_trace": "real_transfer/teleop_trace_20261115_050830.json",
+  "source": "operator-confirmed grasp-closed pose from relative-start teleoperation",
+  "table_frame": "same as SO101CalibratedIK paper frame; origin remains existing fixed-pick object reference",
+  "gripper_open_target": 15.611899532284658,
+  "gripper_closed_target": 0.4295416018351242,
+  "grasp_open": {
+    "elapsed_s": 21.419,
+    "measured_joint_deg": {
+      "shoulder_pan": -10.153846153846153,
+      "shoulder_lift": 17.626373626373628,
+      "elbow_flex": 11.252747252747254,
+      "wrist_flex": 70.85714285714286,
+      "wrist_roll": -164.35164835164835,
+      "gripper": 15.389876880984952
+    },
+    "tcp_table_xyz_mm": [
+      7.9791,
+      -1.6644,
+      9.1097
+    ],
+    "approach_axis_tilt_deg": 9.7363,
+    "approach_axis_direction": "toward robot base"
+  },
+  "grasp_closed": {
+    "elapsed_s": 22.782,
+    "measured_joint_deg": {
+      "shoulder_pan": -11.824175824175825,
+      "shoulder_lift": 20.703296703296704,
+      "elbow_flex": 10.373626373626374,
+      "wrist_flex": 71.47252747252747,
+      "wrist_roll": -165.4945054945055,
+      "gripper": 6.019151846785226
+    },
+    "tcp_table_xyz_mm": [
+      3.1626,
+      -6.7984,
+      3.2102
+    ],
+    "approach_axis_tilt_deg": 12.5495,
+    "approach_axis_direction": "toward robot base"
+  },
+  "grasp_tcp_offset_table_mm": [
+    3.1626,
+    -6.7984,
+    3.2102
+  ]
+}

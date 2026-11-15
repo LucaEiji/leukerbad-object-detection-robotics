@@ -1,0 +1,33 @@
+{
+  "deterministic_reset": true,
+  "no_weld_or_attachment": true,
+  "physical_contact_lift": {
+    "success": true,
+    "lift": 0.10873852322766271,
+    "held": true,
+    "reward": 12.718463080691567,
+    "grasp_xyz": [
+      0.23,
+      0.0,
+      0.018
+    ],
+    "grasp_yaw": 1.5707963267948966
+  },
+  "object_falls_when_jaws_open": {
+    "before_height": 0.11653113985012115,
+    "after_height": 0.007792800131494074
+  },
+  "miss_is_not_a_success": {
+    "success": false,
+    "lift": 1.8350917633646463e-07,
+    "held": false,
+    "reward": 0.1278782489690447,
+    "grasp_xyz": [
+      0.265,
+      0.035,
+      0.026999999999999996
+    ],
+    "grasp_yaw": 1.5707963267948966
+  },
+  "finite_physics_random_trials": 20
+}

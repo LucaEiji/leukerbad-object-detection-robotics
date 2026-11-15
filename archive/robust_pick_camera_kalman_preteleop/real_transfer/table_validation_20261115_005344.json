@@ -1,0 +1,25 @@
+{
+  "source_unchanged": "real_transfer/table_20261115_005344.json",
+  "corrected_file": "real_transfer/table_20261115_005344_corrected.json",
+  "operator_confirmed_swap": [
+    4,
+    5
+  ],
+  "leave_one_out_max_error_deg": {
+    "shoulder_pan": 0.158241758241763,
+    "shoulder_lift": 3.5244755244755264,
+    "elbow_flex": 5.3466533466533335,
+    "wrist_flex": 5.730269730269761,
+    "wrist_roll": 1.1368683772161603e-13
+  },
+  "repeat_20_0_delta_deg": {
+    "shoulder_pan": -0.1758241758241752,
+    "shoulder_lift": 3.78021978021978,
+    "elbow_flex": -6.153846153846157,
+    "wrist_flex": 5.274725274725277,
+    "wrist_roll": 0.0
+  },
+  "ready_for_execution": false,
+  "reason": "Repeated same position differs by >5 degrees; cross validation >3 degrees; missing repeated center",
+  "video_used": false
+}

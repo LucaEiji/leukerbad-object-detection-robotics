@@ -1,0 +1,23 @@
+{
+  "schema": "wrist_servo_calibration_v2",
+  "hover_z_mm": 80.0,
+  "u_ref_px": 321.9523162841797,
+  "v_ref_px": 264.6718292236328,
+  "angle_ref_deg": 7.165239673815734,
+  "j_px_per_robot_mm": [
+    [
+      -3.4916778564453126,
+      -0.5483327229817708
+    ],
+    [
+      -0.29458414713541664,
+      1.6141977945963542
+    ]
+  ],
+  "angle_gain_per_yaw_deg": -1.0,
+  "det_j": -5.7977888228609755,
+  "camera_index": 0,
+  "pose_mode": "observe_pose",
+  "calibration_sha256": "3e8680710c2c8f08e929fe453b853e9e943ae5bc31cf19923bef3d7822744ee4",
+  "source": "empirical_midair_3pt"
+}

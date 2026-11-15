@@ -1,0 +1,114 @@
+[
+  {
+    "steps": 500,
+    "seconds": 14.821197625016794,
+    "success_rate": 0.75,
+    "mean_lift": 0.07902991051315887,
+    "mean_reward": 8.203671292056548
+  },
+  {
+    "steps": 1000,
+    "seconds": 32.57584129204042,
+    "success_rate": 1.0,
+    "mean_lift": 0.09927208317588392,
+    "mean_reward": 10.835113374732396
+  },
+  {
+    "steps": 1500,
+    "seconds": 50.14138979202835,
+    "success_rate": 1.0,
+    "mean_lift": 0.09964438225365546,
+    "mean_reward": 10.914265005931847
+  },
+  {
+    "steps": 2000,
+    "seconds": 67.65391366701806,
+    "success_rate": 1.0,
+    "mean_lift": 0.09997219173966948,
+    "mean_reward": 10.939792096540293
+  },
+  {
+    "steps": 2500,
+    "seconds": 84.9483367089997,
+    "success_rate": 1.0,
+    "mean_lift": 0.100235782163141,
+    "mean_reward": 10.981740465286949
+  },
+  {
+    "steps": 3000,
+    "seconds": 102.35271570901386,
+    "success_rate": 1.0,
+    "mean_lift": 0.1006954619566127,
+    "mean_reward": 11.055711127030127
+  },
+  {
+    "steps": 3500,
+    "seconds": 119.82603300001938,
+    "success_rate": 1.0,
+    "mean_lift": 0.10156426779089811,
+    "mean_reward": 11.081764576062012
+  },
+  {
+    "steps": 4000,
+    "seconds": 137.27613683399977,
+    "success_rate": 1.0,
+    "mean_lift": 0.10158180967776502,
+    "mean_reward": 11.134157209928565
+  },
+  {
+    "steps": 4500,
+    "seconds": 154.3309809170314,
+    "success_rate": 1.0,
+    "mean_lift": 0.10212791490727019,
+    "mean_reward": 11.170579212258538
+  },
+  {
+    "steps": 5000,
+    "seconds": 171.3736975840293,
+    "success_rate": 1.0,
+    "mean_lift": 0.10262412021750535,
+    "mean_reward": 11.232792238144668
+  },
+  {
+    "steps": 5500,
+    "seconds": 188.40794704202563,
+    "success_rate": 1.0,
+    "mean_lift": 0.10315596081556888,
+    "mean_reward": 11.265177277279598
+  },
+  {
+    "steps": 6000,
+    "seconds": 205.40823120903224,
+    "success_rate": 1.0,
+    "mean_lift": 0.1033545235791883,
+    "mean_reward": 11.303169771203969
+  },
+  {
+    "steps": 6500,
+    "seconds": 222.7321296670125,
+    "success_rate": 1.0,
+    "mean_lift": 0.10376266026582176,
+    "mean_reward": 11.331923465868067
+  },
+  {
+    "steps": 7000,
+    "seconds": 240.00640220905188,
+    "success_rate": 1.0,
+    "mean_lift": 0.10377358683744957,
+    "mean_reward": 11.343634097312986
+  },
+  {
+    "steps": 7500,
+    "seconds": 256.8439896250493,
+    "success_rate": 1.0,
+    "mean_lift": 0.10422570522577752,
+    "mean_reward": 11.386723493333426
+  },
+  {
+    "steps": 8000,
+    "seconds": 273.72871362499427,
+    "success_rate": 1.0,
+    "mean_lift": 0.10456304039702034,
+    "mean_reward": 11.39279432364682
+  }
+]
