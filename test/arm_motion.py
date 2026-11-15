@@ -188,13 +188,61 @@ def _init_origin():
     global _origin
     x0, y0, z0 = fk_xy(REST_POSE)
     if ORIGIN_OVERRIDE is not None:
-        x0, y0 = ORIGIN_OVERRIDE
+        x0, y0 = ORIGIN_OVERRIDE[:2]
+        if len(ORIGIN_OVERRIDE) == 3:
+            z0 = ORIGIN_OVERRIDE[2]
     _origin = (x0, y0, max(z0, MIN_Z))
     print(f"[arm_motion] Origine (repère base) : x0={x0:.3f} y0={y0:.3f} z0={z0:.3f} m"
           + (" [mesurée]" if ORIGIN_OVERRIDE is not None else " [calculée depuis REST_POSE]"))
     if not (MIN_Z <= z0 <= 0.25):
         print("[arm_motion] ATTENTION : z0 incohérent -> REST_POSE doit être une pose "
               "pince vers le bas au-dessus de la table, ou vérifie SIGN/OFFSET/L_TOOL.")
+
+
+def max_symmetric_range(x0_cm, z_cm, y0_cm=0.0, limit_cm=30):
+    """Plus grand R (cm, entier) tel que TOUT le carré [-R, +R]^2 autour de (x0, y0) soit atteignable."""
+    best = -1
+    for R in range(0, limit_cm + 1):
+        for a in range(-R, R + 1):
+            for b in range(-R, R + 1):
+                if max(abs(a), abs(b)) != R:
+                    continue
+                try:
+                    ik_xy(_mm(x0_cm + a), _mm(y0_cm + b), _mm(z_cm))
+                except ValueError:
+                    return best
+        best = R
+    return best
+
+
+def best_origin(z_cm=7.0, x_min_cm=8.0, x_max_cm=35.0, step_cm=0.5):
+    """
+    Cherche la distance x0 (cm, depuis l'axe de la base, sur l'axe avant) qui maximise la plage
+    symétrique [-R, +R] atteignable autour de l'origine, à la hauteur z_cm.
+    Renvoie (x0_cm, R_cm). Aucun mouvement.
+    """
+    best = (None, -1)
+    x = x_min_cm
+    while x <= x_max_cm + 1e-9:
+        R = max_symmetric_range(x, z_cm)
+        if R > best[1]:
+            best = (x, R)
+        x += step_cm
+    return best
+
+
+def use_best_origin(z_cm=7.0):
+    """Fixe l'origine à l'endroit optimal. Il faut ensuite PLACER le bras physiquement
+    au-dessus de ce point (distance x0 mesurée depuis l'axe de la base) avant de bouger."""
+    global ORIGIN_OVERRIDE
+    x0, R = best_origin(z_cm)
+    if x0 is None or R < 0:
+        raise RuntimeError("Aucune origine ne permet d'atteindre même (0, 0) : vérifier la géométrie.")
+    ORIGIN_OVERRIDE = (x0 / 100.0, 0.0, z_cm / 100.0)
+    _init_origin()
+    print(f"[arm_motion] Origine optimale : à {x0:.1f} cm de l'axe de la base, hauteur {z_cm:.1f} cm "
+          f"-> plage symétrique garantie : +/-{R} cm en X et en Y.")
+    return x0, R
 
 
 # ----------------------------------------------------------------------------

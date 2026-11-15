@@ -30,7 +30,8 @@ import arm_motion as am
 # ----------------------------------------------------------------------------
 # CONFIGURATION DU TEST
 # ----------------------------------------------------------------------------
-ORIGIN_X_CM = 16.0     # distance (cm) axe de la base -> origine ; à remplacer par TA mesure
+ORIGIN_X_CM = 10.0      # distance (cm) pied du bras -> origine, dans l'axe ; None = origine optimale calculée
+SIM_Z_CM = 10.0        # hauteur de la pince pour la simulation (cm)
 GRID_CM = 15           # le quadrillage va de -15 à +15 cm
 FRAMES_PER_MOVE = 25
 
@@ -38,12 +39,8 @@ FRAMES_PER_MOVE = 25
 TESTS = [
     (0, 0),
     (2, 0),
-    (0, 0),       # résolution au mm : 10,3 cm
-    (0, 2),
     (0, 0),
-    (-2, 0),
-    (0, 0),         # attendu : refusé avec 20 deg de pince max
-    (0, -2),
+    (0, 2),
     (0, 0),
 ]
 
@@ -73,13 +70,27 @@ def reachable_map(x0, y0, z0):
     return vals, img
 
 
+ORIGIN_X_CM_USED = 0.0
+
+
 def simulate():
     """Exécute TESTS en dry run, renvoie la liste des frames et le résumé."""
-    am.ORIGIN_OVERRIDE = (ORIGIN_X_CM / 100.0, 0.0)
+    if ORIGIN_X_CM is None:
+        am.use_best_origin(SIM_Z_CM)
+        global ORIGIN_X_CM_USED
+        ORIGIN_X_CM_USED = am.ORIGIN_OVERRIDE[0] * 100
+    else:
+        am.ORIGIN_OVERRIDE = (ORIGIN_X_CM / 100.0, 0.0, SIM_Z_CM / 100.0)
+        ORIGIN_X_CM_USED = ORIGIN_X_CM
     am.connect(dry_run=True)
     x0, y0, z0 = am._origin
     # départ du bras = origine (le bras est supposé posé au repos au-dessus du centre)
-    start = am.ik_xy(x0, y0, z0)
+    try:
+        start = am.ik_xy(x0, y0, z0)
+    except ValueError as e:
+        print(f"\nL'origine elle-même (0,0) est inatteignable : {e}")
+        print("-> change ORIGIN_X_CM / SIM_Z_CM, ou lance am.use_best_origin() pour une origine atteignable.")
+        sys.exit(1)
     am._state = dict(start, **{"gripper.pos": am.GRIPPER_CLOSED})
 
     frames, summary = [], []
@@ -144,7 +155,7 @@ def draw(frames, summary, origin):
     ax.set_yticks(np.arange(-GRID_CM - 0.5, GRID_CM + 1.5, 1), minor=True)
     ax.grid(which="minor", color="#cccccc", lw=0.4)
     ax.grid(which="major", color="#777777", lw=0.8)
-    ax.set_xlabel(f"dy (cm)  <- gauche | droite ->\n(base du robot : {ORIGIN_X_CM:.0f} cm derrière l'origine, hors cadre en bas)")
+    ax.set_xlabel(f"dy (cm)  <- gauche | droite ->\n(base du robot : {ORIGIN_X_CM_USED:.1f} cm derrière l'origine, hors cadre en bas)")
     ax.set_ylabel("dx (cm)  arrière | avant (s'éloigne de la base)")
     ax.axhline(0, color="k", lw=0.6)
     ax.axvline(0, color="k", lw=0.6)
@@ -165,15 +176,13 @@ def draw(frames, summary, origin):
 
     def update(i):
         f = frames[i]
-        hist["x"].append(f["py"]) 
-        hist["y"].append(f["px"])
+        hist["x"].append(f["py"]); hist["y"].append(f["px"])
         trail.set_data(hist["x"], hist["y"])
         tip.set_data([f["py"]], [f["px"]])
         if f["done"]:
             tdx, tdy = f["target"]
             key = "ok" if f["ok"] else "ko"
-            hist[key + "x"].append(tdy)
-            hist[key + "y"].append(tdx)
+            hist[key + "x"].append(tdy); hist[key + "y"].append(tdx)
             ok_pts.set_data(hist["okx"], hist["oky"])
             ko_pts.set_data(hist["kox"], hist["koy"])
         q = f["joints"]
