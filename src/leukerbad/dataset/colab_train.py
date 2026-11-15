@@ -21,6 +21,11 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+from leukerbad.dataset.quality_filter import (
+    QualityFilterReport,
+    filter_dataset_split_by_quality,
+    find_underrepresented_shape_stems,
+)
 from leukerbad.dataset.sam_masker import IMAGE_EXTENSIONS, upgrade_bbox_labels_with_sam
 from leukerbad.dataset.validate import validate_yolo_seg_dataset, write_yolo_dataset_yaml
 
@@ -62,7 +67,7 @@ def _detect_split_dirs(root: Path) -> dict[str, tuple[Path, Path]]:
 
 
 def find_yolo_dataset_root(search_root: Path) -> Path:
-    """Locate a YOLO dataset directory (flat or split, Ultralytics or Roboflow) inside `search_root`."""
+    """Locate a YOLO dataset directory (flat or split) inside `search_root`."""
     root = Path(search_root)
     if _detect_split_dirs(root):
         return root
@@ -97,18 +102,19 @@ def assign_vape_manifest_splits(
     manifest_entries: list[dict[str, Any]],
     seed: int = 42,
 ) -> dict[str, str]:
-    """Assign leak-free `train`/`val`/`test` splits for `public_data/exports/vape_yolo/manifest.jsonl`.
+    """Assign leak-free `train`/`val`/`test` splits for `vape_yolo/manifest.jsonl`.
 
     Honors all pre-designated test/valid splits while fixing provenance traps:
     - `kaggle_test_manual` -> `test` (even though Roboflow exported it with `source_split="train"`).
-    - `source_split == "test"` (`roboflow_primary`, `roboflow_additional`, `manual_photos`) -> `test`.
+    - `source_split == "test"` (`roboflow_primary`, `roboflow_additional`, `manual_photos`)
+      -> `test`.
     - `source_split == "valid"` (`roboflow_primary`, `roboflow_additional`) -> `val`.
     - `roboflow_primary` cross-split `origin_group` siblings in `train` -> moved to `test`/`val`.
     - `manual_photos` (`train`, 3x augmented) -> split by `origin_group` (88% `train`, 12% `val`).
-    - `roboflow_additional` (`train` negatives) -> split by `origin_group` (85% `train`, 10% `val`, 5% `test`).
+    - `roboflow_additional` (`train` negatives) -> split by `origin_group` (85/10/5).
     - `kaggle_train` -> stratified by `(negative, battery_removed)` (85% `train`, 15% `val`).
-    - `open_images_negatives` (`source_split="validation_source"`) -> stratified by lookalike category
-      (`eraser`, `pen`, `perfume`, `spice_rack`, `tin_can`, `torch`) into 80% `train`, 10% `val`, 10% `test`.
+    - `open_images_negatives` (`source_split="validation_source"`) -> stratified by category
+      (`eraser`, `pen`, `perfume`, `spice_rack`, `tin_can`, `torch`) into 80/10/10.
     """
     rng = random.Random(seed)
     assigned: dict[str, str] = {}
@@ -505,7 +511,9 @@ def normalize_yolo_dataset_splits(
     if manifest_entries:
         out_lines: list[str] = []
         for entry in manifest_entries:
-            img_field = str(entry.get("image") or entry.get("filename") or entry.get("file_name") or "")
+            img_field = str(
+                entry.get("image") or entry.get("filename") or entry.get("file_name") or ""
+            )
             img_name = Path(img_field).name
             assigned_sp = final_split_by_name.get(img_name)
             if assigned_sp is None:
@@ -640,7 +648,10 @@ def prepare_dataset_from_drive_source(
             img_dir = prepared_dir / "images" / sp
             lbl_dir = prepared_dir / "labels" / sp
             if _list_images(img_dir):
-                print(f"[{slug}:{sp}] Upgrading any 4-value bboxes to SAM 2 ({sam_weights}) polygons...")
+                print(
+                    f"[{slug}:{sp}] Upgrading any 4-value bboxes to SAM 2 "
+                    f"({sam_weights}) polygons..."
+                )
                 stats = upgrade_bbox_labels_with_sam(
                     images_dir=img_dir,
                     labels_dir=lbl_dir,
@@ -652,12 +663,14 @@ def prepare_dataset_from_drive_source(
 
         print(f"[{slug}] Saving polygon-ready cache back to Drive: {cache_zip} ...")
         tmp_archive_base = work_root / f"{slug}_cache_tmp"
-        archive_path = Path(shutil.make_archive(str(tmp_archive_base), "zip", root_dir=prepared_dir))
+        archive_path = Path(
+            shutil.make_archive(str(tmp_archive_base), "zip", root_dir=prepared_dir)
+        )
         shutil.copy2(archive_path, cache_zip)
         archive_path.unlink(missing_ok=True)
 
     yaml_path = write_yolo_dataset_yaml(prepared_dir, ["vape"])
-    # If `test` split is empty (e.g. dataset only had pre-assigned `train` + `val`), point `test:` to `val`
+    # If `test` split is empty (e.g. only pre-assigned `train` + `val`), point `test:` to `val`
     if not _list_images(prepared_dir / "images" / "test"):
         txt = yaml_path.read_text(encoding="utf-8").replace("test: images/test", "test: images/val")
         yaml_path.write_text(txt, encoding="utf-8")
@@ -673,6 +686,257 @@ def prepare_dataset_from_drive_source(
     return yaml_path
 
 
+def _entry_source_id(entry: dict[str, Any]) -> str:
+    return str(
+        entry.get("source_id")
+        or entry.get("source")
+        or entry.get("dataset")
+        or entry.get("source_dataset")
+        or "default"
+    )
+
+
+def _is_hard_negative_replay_entry(entry: dict[str, Any], lbl_path: Path) -> bool:
+    src = _entry_source_id(entry)
+    is_neg = bool(entry.get("negative", entry.get("is_negative", False))) or _is_empty_label(
+        lbl_path
+    )
+    removed = entry.get("removed_annotations") or {}
+    has_battery = bool(isinstance(removed, dict) and removed.get("battery"))
+    if src == "open_images_negatives":
+        return True
+    if src == "kaggle_train" and (is_neg or has_battery):
+        return True
+    if src == "roboflow_additional" and is_neg:
+        return True
+    return is_neg
+
+
+def _round_robin_pick(
+    buckets: dict[str, list[tuple[Path, Path]]],
+    limit: int,
+    rng: random.Random,
+) -> list[tuple[Path, Path]]:
+    if limit <= 0 or not buckets:
+        return []
+    shuffled_queues: list[list[tuple[Path, Path]]] = []
+    for key in sorted(buckets):
+        items = sorted(buckets[key], key=lambda pair: pair[0].name)
+        rng.shuffle(items)
+        if items:
+            shuffled_queues.append(items)
+
+    picked: list[tuple[Path, Path]] = []
+    cursors = [0] * len(shuffled_queues)
+    while len(picked) < limit:
+        progressed = False
+        for q_idx, queue in enumerate(shuffled_queues):
+            pos = cursors[q_idx]
+            if pos < len(queue):
+                picked.append(queue[pos])
+                cursors[q_idx] = pos + 1
+                progressed = True
+                if len(picked) >= limit:
+                    break
+        if not progressed:
+            break
+    return picked
+
+
+def _verify_zero_cross_split_overlap(dataset_root: Path) -> dict[str, int]:
+    names_by_split: dict[str, set[str]] = {}
+    hashes_by_split: dict[str, set[str]] = {}
+    counts: dict[str, int] = {}
+
+    for sp in SPLITS:
+        imgs = _list_images(dataset_root / "images" / sp)
+        counts[sp] = len(imgs)
+        names_by_split[sp] = {p.name for p in imgs}
+        hashes_by_split[sp] = {hashlib.sha256(p.read_bytes()).hexdigest() for p in imgs}
+
+    split_pairs = (("train", "val"), ("train", "test"), ("val", "test"))
+    for sp_a, sp_b in split_pairs:
+        dup_names = sorted(names_by_split[sp_a] & names_by_split[sp_b])
+        if dup_names:
+            raise ValueError(
+                f"Cross-split filename leakage between {sp_a} and {sp_b}: {dup_names[:5]}"
+            )
+        dup_hashes = sorted(hashes_by_split[sp_a] & hashes_by_split[sp_b])
+        if dup_hashes:
+            raise ValueError(
+                f"Cross-split SHA-256 leakage between {sp_a} and {sp_b}: {dup_hashes[:3]}"
+            )
+    return counts
+
+
+def build_stage2_tabletop_dataset(
+    stage1_dataset_root: Path,
+    output_stage2_root: Path,
+    *,
+    target_source: str = "manual_photos",
+    replay_ratio: float = 2.0,
+    filter_corrupted_augs: bool = True,
+    oversample_compact_factor: int = 2,
+    seed: int = 42,
+) -> dict[str, Any]:
+    """Build a leak-free Stage-2 tabletop dataset with aug filtering, oversampling, and replay."""
+    s1_root = Path(stage1_dataset_root)
+    manifest_path = s1_root / "manifest.jsonl"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"Stage-1 manifest.jsonl not found at {manifest_path}")
+
+    entries: list[dict[str, Any]] = []
+    entry_by_key: dict[str, dict[str, Any]] = {}
+    for raw_line in manifest_path.read_text(encoding="utf-8").splitlines():
+        stripped = raw_line.strip()
+        if not stripped:
+            continue
+        parsed = json.loads(stripped)
+        if not isinstance(parsed, dict):
+            continue
+        entries.append(parsed)
+        for fname in ("image", "file_name", "filename", "image_path", "export_image"):
+            val = parsed.get(fname)
+            if isinstance(val, str) and val:
+                p = Path(val)
+                entry_by_key[p.name] = parsed
+                entry_by_key[p.stem] = parsed
+
+    out_root = Path(output_stage2_root)
+    shutil.rmtree(out_root / "images", ignore_errors=True)
+    shutil.rmtree(out_root / "labels", ignore_errors=True)
+    for sp in SPLITS:
+        (out_root / "images" / sp).mkdir(parents=True, exist_ok=True)
+        (out_root / "labels" / sp).mkdir(parents=True, exist_ok=True)
+
+    hard_neg_buckets: dict[str, list[tuple[Path, Path]]] = {}
+    pos_replay_buckets: dict[str, list[tuple[Path, Path]]] = {}
+
+    for sp in SPLITS:
+        s1_img_dir = s1_root / "images" / sp
+        s1_lbl_dir = s1_root / "labels" / sp
+        for img_p in _list_images(s1_img_dir):
+            lbl_p = s1_lbl_dir / f"{img_p.stem}.txt"
+            entry = entry_by_key.get(img_p.name) or entry_by_key.get(img_p.stem) or {}
+            manifest_sp = _canonical_split_name(entry.get("split"))
+            if manifest_sp is not None and manifest_sp != sp:
+                raise ValueError(
+                    f"Manifest split mismatch for {img_p.name}: dir={sp}, manifest={manifest_sp}"
+                )
+
+            src = _entry_source_id(entry)
+            if src == target_source:
+                _link_or_copy(img_p, out_root / "images" / sp / img_p.name)
+                dst_lbl = out_root / "labels" / sp / f"{img_p.stem}.txt"
+                if lbl_p.is_file():
+                    _link_or_copy(lbl_p, dst_lbl)
+                else:
+                    dst_lbl.write_text("", encoding="utf-8")
+            elif sp == "train":
+                if _is_hard_negative_replay_entry(entry, lbl_p):
+                    hard_neg_buckets.setdefault(src, []).append((img_p, lbl_p))
+                elif not _is_empty_label(lbl_p):
+                    pos_replay_buckets.setdefault(src, []).append((img_p, lbl_p))
+
+    quality_train: QualityFilterReport | None = None
+    quality_val: QualityFilterReport | None = None
+    if filter_corrupted_augs:
+        quality_train = filter_dataset_split_by_quality(
+            out_root / "images" / "train",
+            out_root / "labels" / "train",
+            manifest_entries=entries,
+            keep_best_per_group=True,
+        )
+        quality_val = filter_dataset_split_by_quality(
+            out_root / "images" / "val",
+            out_root / "labels" / "val",
+            manifest_entries=entries,
+            keep_best_per_group=True,
+        )
+
+    train_img_dir = out_root / "images" / "train"
+    train_lbl_dir = out_root / "labels" / "train"
+    target_train_imgs = _list_images(train_img_dir)
+    n_target_train = len(target_train_imgs)
+
+    oversampled_stems: list[str] = []
+    if oversample_compact_factor >= 2 and n_target_train > 0:
+        stem_to_img = {p.stem: p for p in target_train_imgs}
+        candidate_stems = find_underrepresented_shape_stems(train_lbl_dir)
+        for stem in candidate_stems:
+            src_img = stem_to_img.get(stem)
+            src_lbl = train_lbl_dir / f"{stem}.txt"
+            if src_img is None or not src_lbl.is_file():
+                continue
+            oversampled_stems.append(stem)
+            for dup_idx in range(1, oversample_compact_factor):
+                dup_stem = f"{stem}_dup{dup_idx}"
+                _link_or_copy(src_img, train_img_dir / f"{dup_stem}{src_img.suffix}")
+                _link_or_copy(src_lbl, train_lbl_dir / f"{dup_stem}.txt")
+
+    rng = random.Random(seed)
+    desired_replay = max(0, round(n_target_train * max(0.0, replay_ratio)))
+    desired_hard_neg = round(desired_replay * 0.40)
+    desired_pos = desired_replay - desired_hard_neg
+
+    total_hard_avail = sum(len(v) for v in hard_neg_buckets.values())
+    total_pos_avail = sum(len(v) for v in pos_replay_buckets.values())
+    if total_hard_avail < desired_hard_neg:
+        desired_pos += desired_hard_neg - total_hard_avail
+        desired_hard_neg = total_hard_avail
+    elif total_pos_avail < desired_pos:
+        desired_hard_neg = min(total_hard_avail, desired_hard_neg + (desired_pos - total_pos_avail))
+        desired_pos = total_pos_avail
+
+    picked_hard = _round_robin_pick(hard_neg_buckets, desired_hard_neg, rng)
+    picked_pos = _round_robin_pick(pos_replay_buckets, desired_pos, rng)
+    replay_items = picked_hard + picked_pos
+
+    for img_p, lbl_p in replay_items:
+        _link_or_copy(img_p, train_img_dir / img_p.name)
+        dst_lbl = train_lbl_dir / f"{img_p.stem}.txt"
+        if lbl_p.is_file():
+            _link_or_copy(lbl_p, dst_lbl)
+        else:
+            dst_lbl.write_text("", encoding="utf-8")
+
+    split_counts = _verify_zero_cross_split_overlap(out_root)
+    yaml_path = write_yolo_dataset_yaml(out_root, ["vape"])
+    if split_counts["test"] == 0:
+        txt = yaml_path.read_text(encoding="utf-8").replace("test: images/test", "test: images/val")
+        yaml_path.write_text(txt, encoding="utf-8")
+
+    return {
+        "split_counts": split_counts,
+        "quality_train": quality_train,
+        "quality_val": quality_val,
+        "oversampled_stems": oversampled_stems,
+        "replay_count": len(replay_items),
+        "yaml_path": yaml_path,
+    }
+
+
+def _resolve_stage1_weights(
+    drive_root: Path,
+    stage1_weights: Path | None,
+    skip_stage1: bool,
+) -> Path | None:
+    if stage1_weights is not None:
+        candidate = Path(stage1_weights)
+        if candidate.is_file():
+            return candidate
+        in_drive = drive_root / candidate
+        if in_drive.is_file():
+            return in_drive
+        raise FileNotFoundError(f"Stage 1 weights file not found: {stage1_weights}")
+
+    if skip_stage1:
+        default_ckpt = drive_root / "vape_stage1_yolo11s_seg_best.pt"
+        if default_ckpt.is_file():
+            return default_ckpt
+    return None
+
+
 def prepare_and_train_from_drive(
     drive_dir: Path,
     work_dir: Path = Path("/content/datasets"),
@@ -684,12 +948,19 @@ def prepare_and_train_from_drive(
     imgsz: int = 640,
     sam_model: Any | None = None,
     skip_train: bool = False,
+    stage1_weights: Path | None = None,
+    skip_stage1: bool = False,
+    run_stage2_manual: bool = False,
+    filter_corrupted_augs: bool = True,
+    stage2_replay_ratio: float = 2.0,
+    stage2_imgsz: int | None = None,
 ) -> Path:
     """Prepare Stage 1 (and optional Stage 2) datasets from Drive and train `yolo11s-seg`."""
     drive_root = Path(drive_dir)
+    work_root = Path(work_dir)
     stage1_yaml = prepare_dataset_from_drive_source(
         drive_dir=drive_root,
-        work_dir=work_dir,
+        work_dir=work_root,
         source_name=zip_name,
         sam_weights=sam_weights,
         sam_model=sam_model,
@@ -699,10 +970,25 @@ def prepare_and_train_from_drive(
     if stage2_zip is not None:
         stage2_yaml = prepare_dataset_from_drive_source(
             drive_dir=drive_root,
-            work_dir=work_dir,
+            work_dir=work_root,
             source_name=stage2_zip,
             sam_weights=sam_weights,
             sam_model=sam_model,
+        )
+    elif run_stage2_manual:
+        stage2_dir = work_root / "stage2_manual_clean"
+        stage2_summary = build_stage2_tabletop_dataset(
+            stage1_dataset_root=stage1_yaml.parent,
+            output_stage2_root=stage2_dir,
+            target_source="manual_photos",
+            replay_ratio=stage2_replay_ratio,
+            filter_corrupted_augs=filter_corrupted_augs,
+        )
+        stage2_yaml = Path(stage2_summary["yaml_path"])
+        print(
+            f"[stage2_manual_clean] splits={stage2_summary['split_counts']} | "
+            f"oversampled={len(stage2_summary['oversampled_stems'])} | "
+            f"replay={stage2_summary['replay_count']}"
         )
 
     if skip_train:
@@ -713,60 +999,71 @@ def prepare_and_train_from_drive(
     gpu_cfg = _select_gpu_train_params()
     runs_project = drive_root / "runs_vape_seg"
 
-    stage1_model = YOLO("yolo11s-seg.pt")
-    stage1_results = stage1_model.train(
-        data=str(stage1_yaml),
-        epochs=epochs,
-        imgsz=imgsz,
-        batch=gpu_cfg["batch"],
-        workers=gpu_cfg["workers"],
-        cache=gpu_cfg["cache"],
-        device=gpu_cfg["device"],
-        seed=0,
-        patience=15,
-        save_period=5,
-        degrees=180.0,
-        flipud=0.5,
-        fliplr=0.5,
-        hsv_h=0.4,
-        hsv_s=0.6,
-        hsv_v=0.4,
-        copy_paste=0.2,
-        project=str(runs_project),
-        name="stage1_pretrain",
-        exist_ok=True,
-    )
-    best_pt = (
-        Path(stage1_model.trainer.best)
-        if getattr(stage1_model, "trainer", None) is not None
-        and getattr(stage1_model.trainer, "best", None)
-        else Path(stage1_results.save_dir) / "weights" / "best.pt"
-    )
-    shutil.copy2(best_pt, drive_root / "vape_stage1_yolo11s_seg_best.pt")
-    print(f"Backed up Stage 1 checkpoint -> {drive_root / 'vape_stage1_yolo11s_seg_best.pt'}")
+    preloaded_s1 = _resolve_stage1_weights(drive_root, stage1_weights, skip_stage1)
+    if preloaded_s1 is not None:
+        best_pt = preloaded_s1
+        print(f"Skipping Stage 1 training; loading Stage 1 checkpoint -> {best_pt}")
+    else:
+        stage1_model = YOLO("yolo11s-seg.pt")
+        stage1_results = stage1_model.train(
+            data=str(stage1_yaml),
+            epochs=epochs,
+            imgsz=imgsz,
+            batch=gpu_cfg["batch"],
+            workers=gpu_cfg["workers"],
+            cache=gpu_cfg["cache"],
+            device=gpu_cfg["device"],
+            seed=0,
+            patience=15,
+            save_period=5,
+            degrees=180.0,
+            flipud=0.5,
+            fliplr=0.5,
+            hsv_h=0.4,
+            hsv_s=0.6,
+            hsv_v=0.4,
+            copy_paste=0.2,
+            project=str(runs_project),
+            name="stage1_pretrain",
+            exist_ok=True,
+        )
+        best_pt = (
+            Path(stage1_model.trainer.best)
+            if getattr(stage1_model, "trainer", None) is not None
+            and getattr(stage1_model.trainer, "best", None)
+            else Path(stage1_results.save_dir) / "weights" / "best.pt"
+        )
+        shutil.copy2(best_pt, drive_root / "vape_stage1_yolo11s_seg_best.pt")
+        print(f"Backed up Stage 1 checkpoint -> {drive_root / 'vape_stage1_yolo11s_seg_best.pt'}")
 
+    effective_s2_imgsz = stage2_imgsz if stage2_imgsz is not None else imgsz
     if stage2_yaml is not None:
-        print(f"Starting Stage 2 fine-tuning on {stage2_yaml} ...")
+        print(f"Starting Stage 2 fine-tuning on {stage2_yaml} (imgsz={effective_s2_imgsz}) ...")
         stage2_model = YOLO(str(best_pt))
         stage2_results = stage2_model.train(
             data=str(stage2_yaml),
             epochs=stage2_epochs,
             optimizer="AdamW",
-            lr0=5e-4,
+            lr0=3e-4,
             lrf=0.05,
+            cos_lr=True,
+            warmup_epochs=2.0,
             patience=15,
-            freeze=10,
+            freeze=None,
             seed=0,
-            imgsz=imgsz,
+            imgsz=effective_s2_imgsz,
             batch=min(16, int(gpu_cfg["batch"])),
             workers=gpu_cfg["workers"],
             device=gpu_cfg["device"],
             degrees=180.0,
             flipud=0.5,
             fliplr=0.5,
-            hsv_h=0.4,
-            copy_paste=0.2,
-            mosaic=0.5,
+            scale=0.5,
+            hsv_h=0.04,
+            hsv_s=0.35,
+            hsv_v=0.25,
+            mosaic=0.7,
+            copy_paste=0.35,
             close_mosaic=10,
             project=str(runs_project),
             name="stage2_tabletop_finetune",
@@ -781,17 +1078,39 @@ def prepare_and_train_from_drive(
         shutil.copy2(best_pt, drive_root / "vape_stage2_yolo11s_seg_best.pt")
         print(f"Backed up Stage 2 checkpoint -> {drive_root / 'vape_stage2_yolo11s_seg_best.pt'}")
 
-    eval_yaml = stage2_yaml or stage1_yaml
-    print(f"Evaluating best checkpoint ({best_pt}) on held-out test split ({eval_yaml}) ...")
-    YOLO(str(best_pt)).val(
-        data=str(eval_yaml),
-        split="test",
-        imgsz=imgsz,
-        device=gpu_cfg["device"],
-        project=str(runs_project),
-        name="heldout_test_eval",
-        exist_ok=True,
-    )
+        print(f"Evaluating Stage 2 checkpoint ({best_pt}) on Stage 2 test ({stage2_yaml}) ...")
+        YOLO(str(best_pt)).val(
+            data=str(stage2_yaml),
+            split="test",
+            imgsz=effective_s2_imgsz,
+            device=gpu_cfg["device"],
+            project=str(runs_project),
+            name="heldout_test_eval",
+            exist_ok=True,
+        )
+        print(
+            f"Evaluating Stage 2 checkpoint ({best_pt}) on full Stage 1 test ({stage1_yaml}) ..."
+        )
+        YOLO(str(best_pt)).val(
+            data=str(stage1_yaml),
+            split="test",
+            imgsz=imgsz,
+            device=gpu_cfg["device"],
+            project=str(runs_project),
+            name="heldout_stage1_test_eval",
+            exist_ok=True,
+        )
+    else:
+        print(f"Evaluating best checkpoint ({best_pt}) on held-out test split ({stage1_yaml}) ...")
+        YOLO(str(best_pt)).val(
+            data=str(stage1_yaml),
+            split="test",
+            imgsz=imgsz,
+            device=gpu_cfg["device"],
+            project=str(runs_project),
+            name="heldout_test_eval",
+            exist_ok=True,
+        )
 
     return best_pt
 
@@ -819,7 +1138,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--stage2-zip",
         type=str,
         default=None,
-        help="Optional Stage 2 tabletop .zip/folder (e.g. 'puff pile.v1i.yolo26.zip') to fine-tune.",
+        help="Optional Stage 2 tabletop .zip/folder (e.g. 'puff pile.v1i.yolo26.zip').",
     )
     parser.add_argument(
         "--work-dir",
@@ -836,6 +1155,41 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epochs", type=int, default=50, help="Stage 1 training epochs.")
     parser.add_argument("--stage2-epochs", type=int, default=25, help="Stage 2 fine-tune epochs.")
     parser.add_argument("--imgsz", type=int, default=640, help="YOLO training image size.")
+    parser.add_argument(
+        "--stage1-weights",
+        type=Path,
+        default=None,
+        help="Optional Stage 1 .pt checkpoint to load directly (skips Stage 1 training).",
+    )
+    parser.add_argument(
+        "--skip-stage1",
+        action="store_true",
+        help="Skip Stage 1 if vape_stage1_yolo11s_seg_best.pt exists in --drive-dir.",
+    )
+    parser.add_argument(
+        "--run-stage2-manual",
+        action="store_true",
+        help="Build leak-free manual_photos + replay Stage 2 dataset and fine-tune.",
+    )
+    parser.add_argument(
+        "--no-filter-corrupted-augs",
+        dest="filter_corrupted_augs",
+        action="store_false",
+        default=True,
+        help="Disable whiteout/blackout/blur filtering on Stage 2 train/val splits.",
+    )
+    parser.add_argument(
+        "--stage2-replay-ratio",
+        type=float,
+        default=2.0,
+        help="Ratio of Stage 1 replay samples to manual_photos train samples (default: 2.0).",
+    )
+    parser.add_argument(
+        "--stage2-imgsz",
+        type=int,
+        default=None,
+        help="Optional Stage 2 YOLO image size override (defaults to --imgsz).",
+    )
     parser.add_argument(
         "--prepare-only",
         action="store_true",
@@ -857,6 +1211,12 @@ def main(argv: list[str] | None = None) -> int:
         stage2_epochs=args.stage2_epochs,
         imgsz=args.imgsz,
         skip_train=args.prepare_only,
+        stage1_weights=args.stage1_weights,
+        skip_stage1=args.skip_stage1,
+        run_stage2_manual=args.run_stage2_manual,
+        filter_corrupted_augs=args.filter_corrupted_augs,
+        stage2_replay_ratio=args.stage2_replay_ratio,
+        stage2_imgsz=args.stage2_imgsz,
     )
     return 0
 

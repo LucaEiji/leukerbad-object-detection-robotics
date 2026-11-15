@@ -6,6 +6,14 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from leukerbad.dataset.capture import VALID_SPLITS, build_capture_filename, save_labeled_frame
+    from leukerbad.dataset.quality_filter import (
+        ImageQualityMetrics,
+        QualityFilterReport,
+        assess_image_quality,
+        compute_polygon_elongation,
+        filter_dataset_split_by_quality,
+        find_underrepresented_shape_stems,
+    )
     from leukerbad.dataset.sam_masker import (
         ParsedYoloLine,
         parse_yolo_label_line,
@@ -21,9 +29,15 @@ if TYPE_CHECKING:
 
 __all__ = [
     "VALID_SPLITS",
+    "ImageQualityMetrics",
     "ParsedYoloLine",
+    "QualityFilterReport",
     "ValidationReport",
+    "assess_image_quality",
     "build_capture_filename",
+    "compute_polygon_elongation",
+    "filter_dataset_split_by_quality",
+    "find_underrepresented_shape_stems",
     "parse_yolo_label_line",
     "polygon_px_to_yolo_seg_line",
     "save_labeled_frame",
@@ -39,6 +53,17 @@ def __getattr__(name: str) -> Any:
         from leukerbad.dataset import capture
 
         return getattr(capture, name)
+    if name in (
+        "ImageQualityMetrics",
+        "QualityFilterReport",
+        "assess_image_quality",
+        "compute_polygon_elongation",
+        "filter_dataset_split_by_quality",
+        "find_underrepresented_shape_stems",
+    ):
+        from leukerbad.dataset import quality_filter
+
+        return getattr(quality_filter, name)
     if name in (
         "ParsedYoloLine",
         "parse_yolo_label_line",
