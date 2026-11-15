@@ -1,15 +1,15 @@
 # Leukerbad Object Detection Robotics
 
-Two-stage disposable vape & e-waste detection and analytical 2D grasp pose estimation (`YOLOv11-seg` + Rotating Calipers OBB + optional `Gemini 2.5 Flash` lookalike verifier) built for Dual SO-101 robotic arms at the Leukerbad Robotics Hackathon.
+Four-stage disposable vape & e-waste perception, analytical 2D grasp pose estimation, and open-world VLM discovery & pick-order planning (`Tiled YOLOv11-seg` + Rotating Calipers OBB + `Gemini 2.5 Flash` batched verifier & scene discoverer + SO-101 jaw-clearance ranker) built for Dual SO-101 robotic arms at the Leukerbad Robotics Hackathon.
 
 ## Overview
 
-Discarded lithium-ion disposable vapes and e-cigarettes present severe fire hazards during automated waste handling. This project implements a real-time, high-precision detection and robotic grasp planning system:
+Discarded lithium-ion disposable vapes and e-cigarettes ("puffs") present severe fire hazards during automated waste handling. This project implements an end-to-end perception and robotic grasp planning pipeline optimized for cluttered `1920x1080` overhead tabletop scenes:
 
-1. **Stage 1 (Local Real-Time Segmentation)**: Ultralytics `YOLOv11-seg` detects and segments irregular vape bodies and pods against cluttered conveyor and tabletop backgrounds.
-2. **Analytical Grasp Pose Estimation**: Rotating Calipers minimum-area bounding box calculation extracts object orientation, major/minor axes, and an antipodal grasp point (`GraspCandidate`) with optimal gripper approach angle and opening width.
-3. **Stage 2 (Multimodal VLM Verifier)**: An optional crop-level `Gemini 2.5 Flash` verifier inspects fine structural cues (mouthpieces, airflow holes, seams, pocket clips) to reliably reject benign tabletop lookalikes (AirPods cases, pens, highlighters, lipsticks, USB drives, lighters).
-4. **Physical Trial Logging & Robotics Protocol**: Complete trial logging for empirical grasp success evaluation (Dataset B) and protocol interfaces (`Pose`, `RobotArm`) for Dual SO-101 arm motion execution.
+1. **Stage 1 (Multi-Scale Tiled Segmentation)**: Ultralytics `YOLOv11-seg` wrapped by `TiledYoloSegDetector` (`2x2` overlapping tiles + full-frame pass + optional LAB `L`-channel CLAHE) magnifies small overhead puffs before `640` downscaling and fuses seam/occlusion-split masks via local ROI polygon union.
+2. **Analytical Grasp Pose Estimation**: Rotating Calipers (`cv2.minAreaRect`) extracts object orientation, major/minor axes, and an antipodal grasp pose (`GraspCandidate`) with wrist approach angle and jaw opening width in pixels and millimeters.
+3. **Stage 2 (Batched VLM Crop Gate & Low-Confidence Rescue)**: `VlmVerifiedDetector` sends full-scene context + padded candidate crops to `Gemini 2.5 Flash` in a single batched call to rescue low-confidence box-mod/upright puffs while rejecting 2D printed graphics on cardboard packaging (`AUKEY`/`ElfBar` boxes), pens (`Bic`), cylindrical batteries (`AA`/`AAA`), flashlights, inhalers, and AirPods cases.
+4. **Stage 3 & 4 (Open-World Missed-Vape Discovery & SO-101 Pick-Order Ranker)**: `HybridVlmDetector` (`vlm_scene.py`) inspects `FOUND`-masked scenes for any unmarked or partially occluded 3D vapes, extracts oriented foreground contours (`extract_contour_grasp_in_roi`), and ranks all confirmed vapes (`#1, #2, ...`) by antipodal jaw collision clearance, occlusion status, and battery-damage urgency (`rank_grasp_candidates`).
 
 ## Project Layout
 
@@ -19,11 +19,15 @@ src/leukerbad/
     base.py             Detection & GraspCandidate interfaces, Detector protocol
     geometry.py         Rotating Calipers OBB, axial angle normalization, 2D grasp pose math
     yolo_seg.py         YoloSegDetector wrapping Ultralytics YOLOv11-seg inference
-    vlm_verifier.py     VlmVerifiedDetector using Gemini 2.5 Flash for lookalike filtering
-    visualize.py        OpenCV overlay renderer (masks, OBB, major axis, antipodal jaw markers)
+    tiled_detector.py   TiledYoloSegDetector (2x2 overlapping tiles + CLAHE + polygon-union NMS)
+    vlm_verifier.py     VlmVerifiedDetector (single & batched Gemini 2.5 Flash lookalike gate)
+    vlm_scene.py        HybridVlmDetector, 0..1000 scene discovery, LAB contour grasp, pick ranker
+    visualize.py        OpenCV overlay renderer (masks, OBB, jaw markers, #rank & VLM pills)
   dataset/
     capture.py          Dataset A interactive webcam capture CLI with split tagging
     sam_masker.py       SAM 2 batch bbox-to-polygon upgrader and 1-click interactive annotator
+    quality_filter.py   Roboflow whiteout/blackout/blur augmentation filter & compact-shape finder
+    colab_train.py      Leak-free manifest split normalizer, SAM 2 cache, & 2-stage Colab trainer
     validate.py         Split hygiene, dHash duplicate detection, and held-out tag validator
   evaluation/
     grasp_logger.py     Dataset B physical grasp trial logger (raw/overlay PNGs, JSONL, CSV)
@@ -73,8 +77,11 @@ uv run leukerbad-detect --synthetic-demo --mm-per-px 0.5 --save outputs/syntheti
 # Detect on a static tabletop image with custom weights and confidence threshold
 uv run leukerbad-detect --image path/to/tabletop.jpg --weights yolo11s-seg.pt --conf 0.35 --save annotated.png
 
-# Live webcam feed with Gemini VLM verifier and vape-only filtering
-uv run leukerbad-detect --camera 0 --verifier gemini --only-vapes
+# 1080p overhead tabletop inference with 2x2 overlapping tiles + Hybrid Gemini VLM + pick ranking
+uv run leukerbad-detect --image path/to/tabletop_1080p.png --weights vape_stage2_yolo11s_seg_best.pt --tiled --conf 0.15 --verifier hybrid --only-vapes --save annotated.png
+
+# Live webcam feed with tiled YOLO + Hybrid VLM (press 'v' for on-demand VLM verify & discovery)
+uv run leukerbad-detect --camera 0 --weights vape_stage2_yolo11s_seg_best.pt --tiled --conf 0.20 --verifier hybrid --only-vapes
 ```
 
 ### CLI Flags
@@ -83,16 +90,19 @@ uv run leukerbad-detect --camera 0 --verifier gemini --only-vapes
 |---|---|---|
 | `--synthetic-demo` | flag | Run offline on a generated synthetic tabletop scene with rotated vapes and distractors. |
 | `--image <path>` | Path | Path to an input image file. |
-| `--camera <index>` | int | OpenCV webcam device index (e.g. `0`). Interactive keys: `q` quit, `s` save numbered snapshot, `v` force VLM verify. |
+| `--camera <index>` | int | OpenCV webcam device index (e.g. `0`). Interactive keys: `q` quit, `s` save numbered snapshot, `v` force VLM verify/discover. |
 | `--save <path>` | Path | Save the annotated visualization frame to this path. |
 | `--weights <path>` | str (`yolo11s-seg.pt`) | Ultralytics segmentation model checkpoint path or name. |
 | `--conf <float>` | float (`0.25`) | Minimum confidence threshold for Stage-1 detections. |
+| `--tiled` | flag | Enable overlapping `2x2` + full-frame tiled segmentation with polygon-union NMS for `1080p` overhead cameras. |
+| `--clahe` | flag | Apply LAB luminance (`L`-channel) CLAHE contrast normalization before detection. |
 | `--labels <csv>` | str | Comma-separated whitelist of allowed class labels (e.g. `vape,disposable_vape`). |
 | `--mm-per-px <float>` | float | Tabletop scale (mm per pixel) to compute physical SO-101 jaw opening in mm. |
-| `--verifier {none,gemini}` | choice (`none`) | Stage-2 multimodal verifier backend (`none` or `gemini`). |
+| `--verifier {none,gemini,hybrid}` | choice (`none`) | Multimodal backend: `none`, `gemini` (crop verifier), or `hybrid` (batched crop gate + open-world missed-vape discovery + SO-101 pick ranker). |
+| `--discovery-trigger {always,when_empty,never}` | choice (`always`) | When `--verifier hybrid` triggers full-scene Gemini missed-vape discovery. |
 | `--verify-min <float>` | float (`0.20`) | Lower confidence bound for sending Stage-1 candidates to Gemini VLM. |
 | `--verify-max <float>` | float (`0.85`) | Upper confidence bound for VLM verification (candidates above this threshold are accepted directly). |
-| `--verify-every <int>` | int (`30`) | In camera mode, run periodic VLM verification every N frames. |
+| `--verify-every <int>` | int (`30`) | In camera mode, run periodic VLM verification every N frames (`0` = manual `'v'` key only). |
 | `--only-vapes` | flag | Filter out non-vape detections and distractors. |
 
 ## Dataset A & Training Workflow
@@ -127,10 +137,18 @@ Validate split isolation, dHash image deduplication, and held-out test device le
 uv run python -m leukerbad.dataset.validate --dataset datasets/dataset_a_overhead
 ```
 
-### 5. Two-Stage YOLOv11-seg Training
-Train on Google Colab (free T4 GPU) or locally using `notebooks/train_vape_seg.ipynb`:
-- **Stage 1**: Train base `yolo11s-seg` on overhead vape dataset.
-- **Stage 2**: Hard-negative mining and fine-tuning on lookalike distractors.
+### 5. Two-Stage Leak-Free YOLOv11-seg Cloud GPU Training (`colab_train`)
+Train on Google Colab (`T4` / `L4` / `A100`) using `leukerbad.dataset.colab_train` or `notebooks/train_vape_seg.ipynb`:
+- **Stage 1**: Normalizes `vape_yolo/manifest.jsonl` with strict `origin_group` isolation, upgrades `8,545` boxes to `SAM 2` polygons, caches `vape_yolo_seg_cache.zip` to Google Drive, and trains `yolo11s-seg`.
+- **Stage 2 (`--run-stage2-manual`)**: Filters corrupted whiteout/blackout/motion-blurred Roboflow augmentations from `manual_photos` `train`/`val` (never touching `test`, while rescuing $\ge 1$ variant per `origin_group`), oversamples compact box-mod/upright shapes & cluttered multi-vape scenes, mixes a `2:1` Stage-1 hard-negative replay buffer, fine-tunes unfrozen with cosine `AdamW` (`lr0=3e-4`), and evaluates on both `manual_photos` `test` and full Stage-1 `test`:
+```bash
+python -m leukerbad.dataset.colab_train \
+  --drive-dir /content/drive/MyDrive/HACKLEUK \
+  --skip-stage1 \
+  --run-stage2-manual \
+  --stage2-epochs 30 \
+  --stage2-imgsz 800
+```
 
 ### 6. Dataset B Physical Grasp Trial Logging
 Log real-world tabletop grasp attempts and calculate empirical success metrics:

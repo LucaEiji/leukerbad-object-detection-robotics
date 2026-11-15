@@ -375,3 +375,105 @@ def test_camera_loop_snapshots_and_vlm_throttling(
     assert (tmp_path / "runs" / "out_001.png").is_file()
     assert (tmp_path / "runs" / "out_002.png").is_file()
     assert not save_base.exists()
+
+
+def test_cli_tiled_and_clahe_flags_wrap_detector(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    out_path = tmp_path / "tiled_demo.png"
+    rc = cli.main(["--synthetic-demo", "--tiled", "--clahe", "--save", str(out_path)])
+    captured = capsys.readouterr()
+
+    assert rc == 0
+    assert out_path.is_file()
+    assert "Detected 3 object(s):" in captured.out
+
+
+def test_cli_hybrid_verifier_wires_discovery_and_pick_ranks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    recorded: list[dict[str, Any]] = []
+
+    class _FakeHybridDetector:
+        def __init__(self, base_detector: Any, **kwargs: Any) -> None:
+            self.base_detector = base_detector
+            recorded.append(kwargs)
+
+        def detect(self, frame: np.ndarray) -> list[Detection]:
+            del frame
+            poly = np.array(
+                [[120.0, 140.0], [220.0, 140.0], [220.0, 175.0], [120.0, 175.0]],
+                dtype=np.float32,
+            )
+            return [
+                Detection(
+                    label="vape",
+                    confidence=0.89,
+                    bounding_box=(120, 140, 220, 175),
+                    polygon=poly,
+                    grasp=compute_grasp_from_polygon(poly),
+                    metadata={
+                        "source": "vlm_scene_discovery",
+                        "vlm": {
+                            "verified": True,
+                            "discovered": True,
+                            "is_vape": True,
+                            "is_occluded": False,
+                        },
+                        "robotics": {
+                            "pick_rank": 1,
+                            "grasp_priority": 0.94,
+                            "clearance_ok": True,
+                            "blocking_reasons": [],
+                        },
+                    },
+                )
+            ]
+
+    fake_module = types.ModuleType("leukerbad.detection.vlm_scene")
+    fake_module.HybridVlmDetector = _FakeHybridDetector  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "leukerbad.detection.vlm_scene", fake_module)
+
+    out_path = tmp_path / "hybrid_out.png"
+    rc = cli.main(
+        [
+            "--synthetic-demo",
+            "--tiled",
+            "--verifier",
+            "hybrid",
+            "--discovery-trigger",
+            "when_empty",
+            "--only-vapes",
+            "--mm-per-px",
+            "0.45",
+            "--save",
+            str(out_path),
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert rc == 0
+    assert out_path.is_file()
+    assert len(recorded) == 1
+    assert recorded[0]["discovery_trigger"] == "when_empty"
+    assert recorded[0]["reject_non_vapes"] is True
+    assert recorded[0]["mm_per_px"] == pytest.approx(0.45)
+    assert "pick=#1" in captured.out
+
+
+def test_cli_hybrid_verifier_missing_api_key_returns_nonzero(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+
+    rc = cli.main(["--synthetic-demo", "--verifier", "hybrid"])
+    captured = capsys.readouterr()
+
+    assert rc == 1
+    assert "--verifier hybrid requires GEMINI_API_KEY" in captured.err

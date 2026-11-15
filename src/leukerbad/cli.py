@@ -213,10 +213,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional tabletop scale (mm per pixel) to compute SO-101 jaw opening in mm.",
     )
     parser.add_argument(
+        "--tiled",
+        action="store_true",
+        default=False,
+        help=(
+            "Enable overlapping 2x2 + full-frame tiled segmentation for high-res (1080p) "
+            "overhead tabletop scenes."
+        ),
+    )
+    parser.add_argument(
+        "--clahe",
+        action="store_true",
+        default=False,
+        help="Apply LAB luminance CLAHE contrast normalization before detection.",
+    )
+    parser.add_argument(
         "--verifier",
-        choices=["none", "gemini"],
+        choices=["none", "gemini", "hybrid"],
         default="none",
-        help="Optional Stage-2 VLM verifier backend (default: none).",
+        help=(
+            "Optional VLM backend: 'none', 'gemini' (crop verifier), or 'hybrid' "
+            "(batched crop verifier + missed-vape scene discovery + SO-101 pick ranker)."
+        ),
+    )
+    parser.add_argument(
+        "--discovery-trigger",
+        choices=["always", "when_empty", "never"],
+        default="always",
+        help=(
+            "With --verifier hybrid, when to run full-scene Gemini missed-vape discovery "
+            "(default: always)."
+        ),
     )
     parser.add_argument(
         "--only-vapes",
@@ -267,17 +294,22 @@ def _filter_only_vapes(detections: list[Detection]) -> list[Detection]:
 def _print_detection_summary(detections: list[Detection]) -> None:
     print(f"Detected {len(detections)} object(s):")
     for idx, det in enumerate(detections, start=1):
+        robotics_meta = det.metadata.get("robotics")
+        pick_rank = (
+            robotics_meta.get("pick_rank") if isinstance(robotics_meta, dict) else None
+        )
+        rank_tag = f"pick=#{pick_rank}, " if isinstance(pick_rank, int) else ""
         if det.grasp is not None:
             cx, cy = det.grasp.center_px
             extra = (
-                f"center=({cx:.1f}, {cy:.1f})px, "
+                f"{rank_tag}center=({cx:.1f}, {cy:.1f})px, "
                 f"wrist={det.grasp.gripper_angle_deg:.1f}deg, "
                 f"width={det.grasp.width_px:.1f}px"
             )
             if "gripper_opening_mm" in det.metadata:
                 extra += f", opening={det.metadata['gripper_opening_mm']:.1f}mm"
         else:
-            extra = f"bbox={det.bounding_box}"
+            extra = f"{rank_tag}bbox={det.bounding_box}"
         print(f"  [{idx}] {det.label} ({det.confidence:.2f}) | {extra}")
 
 
@@ -306,6 +338,8 @@ class _CachedVlmEntry:
     confidence: float
     vlm_meta: dict[str, Any] | None
     raw_yolo_label: str | None
+    robotics_meta: dict[str, Any] | None = None
+    discovered_det: Detection | None = None
 
 
 def _bbox_iou(
@@ -375,6 +409,8 @@ def _apply_cached_verdicts(
             new_meta["raw_yolo_label"] = det.label
         if vlm_info is not None:
             new_meta["vlm"] = {**vlm_info, "cached": True}
+        if matched.robotics_meta is not None:
+            new_meta["robotics"] = dict(matched.robotics_meta)
         merged.append(
             replace(
                 det,
@@ -383,6 +419,12 @@ def _apply_cached_verdicts(
                 metadata=new_meta,
             )
         )
+    for entry in cache:
+        if entry.discovered_det is None:
+            continue
+        if any(_bbox_iou(entry.bounding_box, d.bounding_box) >= 0.30 for d in merged):
+            continue
+        merged.append(entry.discovered_det)
     return merged
 
 
@@ -418,6 +460,14 @@ def _run_vlm_pass_and_build_cache(
                 if "raw_yolo_label" in det.metadata
                 else None
             ),
+            robotics_meta=(
+                dict(det.metadata["robotics"])
+                if isinstance(det.metadata.get("robotics"), dict)
+                else None
+            ),
+            discovered_det=(
+                det if det.metadata.get("source") == "vlm_scene_discovery" else None
+            ),
         )
         for det in verified
     ]
@@ -446,6 +496,15 @@ def _build_detector(
         mm_per_px=args.mm_per_px,
         model=injected_model,
     )
+    if getattr(args, "tiled", False) or getattr(args, "clahe", False):
+        from leukerbad.detection.tiled_detector import TiledYoloSegDetector
+
+        use_tiled = bool(getattr(args, "tiled", False))
+        detector = TiledYoloSegDetector(
+            detector,
+            use_clahe=bool(getattr(args, "clahe", False)),
+            min_tile_trigger_px=800 if use_tiled else 1_000_000,
+        )
     if args.verifier == "gemini":
         from leukerbad.detection.vlm_verifier import VlmVerifiedDetector
 
@@ -454,6 +513,17 @@ def _build_detector(
             min_conf_to_verify=args.verify_min,
             max_conf_to_verify=args.verify_max,
             reject_non_vapes=args.only_vapes,
+        )
+    elif args.verifier == "hybrid":
+        from leukerbad.detection.vlm_scene import HybridVlmDetector
+
+        detector = HybridVlmDetector(
+            detector,
+            min_conf_to_verify=args.verify_min,
+            max_conf_to_verify=args.verify_max,
+            reject_non_vapes=args.only_vapes,
+            discovery_trigger=getattr(args, "discovery_trigger", "always"),
+            mm_per_px=args.mm_per_px,
         )
     return detector
 
@@ -559,11 +629,11 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: --verify-every must be >= 0.", file=sys.stderr)
         return 1
 
-    if args.verifier == "gemini" and not (
+    if args.verifier in {"gemini", "hybrid"} and not (
         os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     ):
         print(
-            "Error: --verifier gemini requires GEMINI_API_KEY or GOOGLE_API_KEY "
+            f"Error: --verifier {args.verifier} requires GEMINI_API_KEY or GOOGLE_API_KEY "
             "to be set in the environment.",
             file=sys.stderr,
         )

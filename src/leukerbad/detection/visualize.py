@@ -26,6 +26,7 @@ def _select_color_bgr(label: str) -> tuple[int, int, int]:
 def _format_vlm_tag(vlm_info: Any) -> str:
     """Build a compact status/hazard badge from `detection.metadata['vlm']`."""
     if isinstance(vlm_info, dict):
+        suffix = "+OCCLUDED" if vlm_info.get("is_occluded") is True else ""
         hazard_flag = bool(
             vlm_info.get("battery_hazard")
             or vlm_info.get("damaged")
@@ -34,16 +35,19 @@ def _format_vlm_tag(vlm_info: Any) -> str:
         )
         hazard_level = vlm_info.get("hazard_level")
         if hazard_level:
-            return f"VLM:{hazard_level}"
+            return f"VLM:{hazard_level}{suffix}"
         if hazard_flag:
-            return "VLM:HAZARD"
+            return f"VLM:HAZARD{suffix}"
+        if vlm_info.get("discovered") is True:
+            return f"VLM:disc{suffix}"
         if vlm_info.get("status"):
-            return f"VLM:{vlm_info['status']}"
+            return f"VLM:{vlm_info['status']}{suffix}"
         if vlm_info.get("category"):
-            return f"VLM:{vlm_info['category']}"
+            return f"VLM:{vlm_info['category']}{suffix}"
         if "is_vape" in vlm_info:
-            return "VLM:vape" if vlm_info["is_vape"] else "VLM:non_vape"
-        return "VLM:verified"
+            base = "VLM:vape" if vlm_info["is_vape"] else "VLM:non_vape"
+            return f"{base}{suffix}"
+        return f"VLM:verified{suffix}"
     if isinstance(vlm_info, str) and vlm_info.strip():
         return f"VLM:{vlm_info.strip()}"
     return "VLM:verified"
@@ -51,7 +55,14 @@ def _format_vlm_tag(vlm_info: Any) -> str:
 
 def _build_label_text(detection: Detection) -> str:
     """Format the readable text pill string for a single detection."""
-    parts = [f"{detection.label} {detection.confidence:.2f}"]
+    robotics_info = detection.metadata.get("robotics")
+    pick_rank = (
+        robotics_info.get("pick_rank")
+        if isinstance(robotics_info, dict)
+        else None
+    )
+    prefix = f"#{pick_rank} " if isinstance(pick_rank, int) else ""
+    parts = [f"{prefix}{detection.label} {detection.confidence:.2f}"]
     if detection.grasp is not None:
         parts.append(f"wrist={detection.grasp.gripper_angle_deg:.1f}deg")
         parts.append(f"w={detection.grasp.width_px:.0f}px")
