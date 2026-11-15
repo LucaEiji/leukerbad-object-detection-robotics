@@ -176,13 +176,15 @@ def draw(frames, summary, origin):
 
     def update(i):
         f = frames[i]
-        hist["x"].append(f["py"]); hist["y"].append(f["px"])
+        hist["x"].append(f["py"])
+        hist["y"].append(f["px"])
         trail.set_data(hist["x"], hist["y"])
         tip.set_data([f["py"]], [f["px"]])
         if f["done"]:
             tdx, tdy = f["target"]
             key = "ok" if f["ok"] else "ko"
-            hist[key + "x"].append(tdy); hist[key + "y"].append(tdx)
+            hist[key + "x"].append(tdy)
+            hist[key + "y"].append(tdx)
             ok_pts.set_data(hist["okx"], hist["oky"])
             ko_pts.set_data(hist["kox"], hist["koy"])
         q = f["joints"]
