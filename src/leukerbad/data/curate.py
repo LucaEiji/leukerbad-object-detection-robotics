@@ -9,6 +9,7 @@ from typing import Any
 
 from .coco import index_coco, load_coco
 from .common import data_root, load_sources, utc_now
+from .yolo import label_path, read_classes
 
 POSITIVE = {"vape", "ecigarette", "e-cigarette", "e_cigarette"}
 NEGATIVE = {"cigarette", "nonvape", "non-vape", "notvape", "not-vape"}
@@ -26,32 +27,9 @@ def decision_for_class(name: str) -> tuple[str, str]:
     return "manual_review", "Unknown source class requires manual review."
 
 
-def _read_classes(raw_dir: Path) -> list[str]:
-    yaml_path = raw_dir / "data.yaml"
-    if not yaml_path.exists():
-        return []
-    try:
-        import yaml
-
-        data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
-    except (ImportError, OSError, ValueError):
-        return []
-    names = data.get("names", [])
-    if isinstance(names, dict):
-        return [str(names[key]) for key in sorted(names, key=lambda value: int(value))]
-    return [str(name) for name in names]
-
-
-def _label_path(raw_dir: Path, relative_image: str) -> Path | None:
-    image_path = raw_dir / relative_image
-    split_dir = image_path.parent.parent
-    candidate = split_dir / "labels" / f"{image_path.stem}.txt"
-    return candidate if candidate.exists() else None
-
-
 def curate_source(source: dict[str, Any]) -> tuple[list[dict], dict[str, Any]]:
     raw_dir = data_root().parent / source["raw_dir"]
-    classes = _read_classes(raw_dir)
+    classes = read_classes(raw_dir)
     coco_index = {}
     coco_result = load_coco(raw_dir)
     if coco_result:
@@ -64,10 +42,10 @@ def curate_source(source: dict[str, Any]) -> tuple[list[dict], dict[str, Any]]:
 
     for line in inventory_path.read_text(encoding="utf-8").splitlines():
         image = json.loads(line)
-        label_path = _label_path(raw_dir, image["relative_path"])
+        annotation_path = label_path(raw_dir, image["relative_path"])
         class_names = []
-        if label_path:
-            for row in label_path.read_text(encoding="utf-8").splitlines():
+        if annotation_path:
+            for row in annotation_path.read_text(encoding="utf-8").splitlines():
                 fields = row.split()
                 if fields and fields[0].isdigit():
                     class_id = int(fields[0])

@@ -47,9 +47,9 @@
       "raw_dir": "public_data/raw/open_images_v7_negatives",
       "license": "CC BY 2.0 per Open Images image metadata; retain each image's license URL and attribution metadata",
       "original_classes": ["eraser", "pen", "perfume", "spice rack", "tin can", "torch"],
-      "source_images": 600,
-      "annotation_format": "Open Images V7 validation bounding boxes used for selection; no VapeGuard positive labels",
-      "notes": "100 disjoint validation images per requested class. Downloaded as negative examples for the VapeGuard vape detector."
+      "target_images": 600,
+      "annotation_format": "Open Images human-verified image-level labels used for selection; no VapeGuard box labels",
+      "notes": "Current local subset is partial. Images are selected as class-confuser examples; Open Images class labels do not establish that an image is vape-free. The downloader resolves image-specific attribution metadata."
     }
   ]
 }

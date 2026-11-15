@@ -22,6 +22,11 @@ archives of the original downloads.
 Original counts are recorded from the inventory generated before the requested cleanup. Current
 counts come from the latest inventory and annotation audit.
 
+Open Images currently contributes 371 class-confuser images toward a target of 600, with no Vape
+boxes. The local subset is partial; current class counts and the label/download selection method
+are maintained in `open_images_negatives.md`. Open Images image-level class labels do not certify
+absence of a vape.
+
 ## Image Exclusions
 
 ### Primary Roboflow dataset

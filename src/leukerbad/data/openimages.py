@@ -24,7 +24,7 @@ TRAIN_METADATA_URL = "https://storage.googleapis.com/openimages/2018_04/train/tr
 ALL_TRAIN_METADATA_URL = "https://storage.googleapis.com/openimages/2018_04/train/train-images-with-labels-with-rotation.csv"
 S3_IMAGE_URL = "https://open-images-dataset.s3.amazonaws.com/{split}/{image_id}.jpg"
 LANDING_URL = "https://storage.googleapis.com/openimages/web/index.html"
-FALLBACKS_PER_CLASS = 500
+FALLBACK_MULTIPLIER = 5
 
 
 def _download_file(url: str, path: Path) -> None:
@@ -34,10 +34,18 @@ def _download_file(url: str, path: Path) -> None:
     temporary = path.with_suffix(path.suffix + ".part")
     with requests.get(url, stream=True, timeout=(30, 180)) as response:
         response.raise_for_status()
+        expected = int(response.headers.get("content-length", 0))
+        print(f"Downloading {path.name} ({expected / (1024 * 1024):.0f} MiB).", flush=True)
+        received = 0
+        next_report = 100 * 1024 * 1024
         with temporary.open("wb") as output:
             for chunk in response.iter_content(chunk_size=4 * 1024 * 1024):
                 if chunk:
                     output.write(chunk)
+                    received += len(chunk)
+                    if received >= next_report:
+                        print(f"  {received / (1024 * 1024):.0f} MiB received.", flush=True)
+                        next_report += 100 * 1024 * 1024
     temporary.replace(path)
 
 
@@ -47,6 +55,9 @@ def _load_classes(path: Path) -> dict[str, str]:
 
 
 def _record(source_id: str, class_name: str, image_id: str, relative: Path, metadata: dict, path: Path) -> dict:
+    pixel_url = metadata.get("PixelURL") or S3_IMAGE_URL.format(
+        split=metadata.get("Subset", "unknown"), image_id=image_id
+    )
     return {
         "source_id": source_id,
         "negative_class": class_name,
@@ -59,7 +70,9 @@ def _record(source_id: str, class_name: str, image_id: str, relative: Path, meta
         "original_url": metadata.get("OriginalURL", "unknown"),
         "landing_url": metadata.get("OriginalLandingURL", LANDING_URL),
         "thumbnail_url": metadata.get("Thumbnail300KURL", "unknown"),
-        "metadata_source": metadata.get("Subset", "unknown"),
+        "image_url": pixel_url,
+        "image_split": metadata.get("Subset", "unknown"),
+        "metadata_source": metadata.get("MetadataSource", "unknown"),
     }
 
 
@@ -92,19 +105,31 @@ def _collect_candidates(
                 if image_id in available_ids and len(candidates[name]) < deficits[name]:
                     candidates[name].add(image_id)
                     selected_ids.add(image_id)
-                elif image_id not in available_ids and len(fallbacks[name]) < FALLBACKS_PER_CLASS:
+                elif (
+                    image_id not in available_ids
+                    and len(fallbacks[name])
+                    < max(0, deficits[name] - len(candidates[name])) * FALLBACK_MULTIPLIER
+                ):
                     fallbacks[name].add(image_id)
-            if rows_seen % 5_000_000 == 0:
-                counts = ", ".join(f"{key} {len(candidates[key])}/{deficits[key]}" for key in CLASSES)
+            if rows_seen % 1_000_000 == 0:
+                counts = ", ".join(
+                    f"{key} bucket {len(candidates[key])}/{deficits[key]}, "
+                    f"fallbacks {len(fallbacks[key])}"
+                    for key in CLASSES
+                )
                 print(f"Scanned {rows_seen:,} labels ({(time.monotonic() - started) / 60:.1f} min): {counts}", flush=True)
-            if all(len(candidates[name]) >= deficits[name] for name in CLASSES) and all(
-                len(fallbacks[name]) >= FALLBACKS_PER_CLASS for name in CLASSES if deficits[name] > 0
-            ):
+            enough_candidates = all(
+                len(candidates[name]) >= deficits[name]
+                or len(fallbacks[name])
+                >= (deficits[name] - len(candidates[name])) * FALLBACK_MULTIPLIER
+                for name in CLASSES
+            )
+            if enough_candidates:
                 break
     return candidates, fallbacks
 
 
-def _metadata_dict(row: dict) -> dict:
+def _metadata_dict(row: dict, metadata_source: str) -> dict:
     return {
         "Subset": row.get("Subset", "unknown"),
         "OriginalURL": row.get("OriginalURL", "unknown"),
@@ -113,7 +138,32 @@ def _metadata_dict(row: dict) -> dict:
         "Author": row.get("Author", "unknown"),
         "Title": row.get("Title", "unknown"),
         "Thumbnail300KURL": row.get("Thumbnail300KURL", "unknown"),
+        "MetadataSource": metadata_source,
     }
+
+
+def _download_image(url: str, path: Path) -> None:
+    temporary = path.with_suffix(".jpg.part")
+    error: Exception | None = None
+    for attempt in range(4):
+        try:
+            with requests.get(url, stream=True, timeout=(20, 90)) as response:
+                response.raise_for_status()
+                with temporary.open("wb") as output:
+                    for chunk in response.iter_content(1024 * 1024):
+                        if chunk:
+                            output.write(chunk)
+            with Image.open(temporary) as image:
+                image.verify()
+            temporary.replace(path)
+            return
+        except Exception as caught:  # noqa: BLE001 - preserve provider-specific failures after retries.
+            error = caught
+            temporary.unlink(missing_ok=True)
+            if attempt < 3:
+                time.sleep(2**attempt)
+    if error is not None:
+        raise error
 
 
 def download_open_images(source: dict) -> dict:
@@ -142,8 +192,10 @@ def download_open_images(source: dict) -> dict:
         available_ids = {row["ImageID"] for row in csv.DictReader(metadata_file)}
     print(f"Indexed {len(available_ids):,} train IDs; remaining quotas: {deficits}", flush=True)
 
-    candidates, fallback_candidates = _collect_candidates(
-        TRAIN_LABEL_URL, class_ids, available_ids, known_files, deficits
+    candidates, fallback_candidates = (
+        _collect_candidates(TRAIN_LABEL_URL, class_ids, available_ids, known_files, deficits)
+        if any(deficits.values())
+        else ({name: set() for name in CLASSES}, {name: set() for name in CLASSES})
     )
     selected_ids: dict[str, str] = {}
     for name in SELECTION_ORDER:
@@ -164,11 +216,11 @@ def download_open_images(source: dict) -> dict:
     with train_metadata_path.open(encoding="utf-8", newline="") as metadata_file:
         for row in csv.DictReader(metadata_file):
             if row["ImageID"] in requested_ids:
-                metadata_by_id[row["ImageID"]] = _metadata_dict(row)
+                metadata_by_id[row["ImageID"]] = _metadata_dict(row, TRAIN_METADATA_URL)
     with validation_metadata_path.open(encoding="utf-8", newline="") as metadata_file:
         for row in csv.DictReader(metadata_file):
             if row["ImageID"] in known_files:
-                metadata_by_id[row["ImageID"]] = _metadata_dict(row)
+                metadata_by_id[row["ImageID"]] = _metadata_dict(row, VALIDATION_METADATA_URL)
 
     if any(deficits.values()):
         print(f"Resolving remaining IDs from Open Images image-level metadata: {deficits}", flush=True)
@@ -179,14 +231,20 @@ def download_open_images(source: dict) -> dict:
             for rows_seen, row in enumerate(csv.DictReader(lines), start=1):
                 image_id = row["ImageID"]
                 possible_classes = fallback_to_classes.get(image_id, [])
+                thumbnail_url = row.get("Thumbnail300KURL", "")
                 for name in SELECTION_ORDER:
-                    if name in possible_classes and deficits[name] > 0 and image_id not in selected_ids:
+                    if (
+                        name in possible_classes
+                        and deficits[name] > 0
+                        and image_id not in selected_ids
+                        and thumbnail_url
+                    ):
                         selected_ids[image_id] = name
-                        metadata_by_id[image_id] = _metadata_dict(row)
-                        metadata_by_id[image_id]["Subset"] = "thumbnail"
+                        metadata_by_id[image_id] = _metadata_dict(row, ALL_TRAIN_METADATA_URL)
+                        metadata_by_id[image_id]["PixelURL"] = thumbnail_url
                         deficits[name] -= 1
                         break
-                if rows_seen % 1_000_000 == 0:
+                if rows_seen % 500_000 == 0:
                     print(f"Matched {len(selected_ids):,} images after {rows_seen:,} metadata rows: {deficits}", flush=True)
                 if not any(deficits.values()):
                     break
@@ -202,36 +260,27 @@ def download_open_images(source: dict) -> dict:
 
     def fetch(job: tuple[str, tuple[str, dict]]) -> dict:
         image_id, (name, metadata) = job
-        split = metadata["Subset"]
         relative = Path("images") / name.replace(" ", "_") / f"{image_id}.jpg"
         path = destination / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         if not path.is_file() or path.stat().st_size == 0:
-            temporary = path.with_suffix(".jpg.part")
-            image_url = (
-                metadata.get("Thumbnail300KURL")
-                if split == "thumbnail"
-                else S3_IMAGE_URL.format(split=split, image_id=image_id)
+            image_url = metadata.get("PixelURL") or S3_IMAGE_URL.format(
+                split=metadata["Subset"], image_id=image_id
             )
-            with requests.get(image_url, stream=True, timeout=(20, 90)) as response:
-                response.raise_for_status()
-                with temporary.open("wb") as output:
-                    for chunk in response.iter_content(1024 * 1024):
-                        if chunk:
-                            output.write(chunk)
-            with Image.open(temporary) as image:
-                image.verify()
-            temporary.replace(path)
+            metadata["PixelURL"] = image_url
+            _download_image(image_url, path)
         return _record(source["id"], name, image_id, relative, metadata, path)
 
     with ThreadPoolExecutor(max_workers=12) as executor:
         futures = {executor.submit(fetch, job): job for job in jobs}
-        for future in as_completed(futures):
+        for completed, future in enumerate(as_completed(futures), start=1):
             try:
                 records.append(future.result())
             except Exception as error:  # noqa: BLE001 - keep per-image failure details.
                 image_id, (name, _) = futures[future]
                 failures.append({"class": name, "image_id": image_id, "error": str(error)})
+            if completed % 25 == 0 or completed == len(futures):
+                print(f"Downloaded {completed}/{len(futures)} newly selected images.", flush=True)
 
     for name in CLASSES:
         for path in existing[name]:
@@ -240,6 +289,7 @@ def download_open_images(source: dict) -> dict:
     records.sort(key=lambda row: (row["negative_class"], row["open_images_id"]))
 
     manifest = data_root() / "manifests" / "open_images_negatives.jsonl"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
     with manifest.open("w", encoding="utf-8") as output:
         for record in records:
             output.write(json.dumps(record, sort_keys=True) + "\n")
@@ -256,7 +306,11 @@ def download_open_images(source: dict) -> dict:
         "classes": CLASSES,
         "per_class": PER_CLASS,
         "license": source["license"],
-        "metadata_sources": [str(validation_metadata_path.relative_to(destination)), str(train_metadata_path.relative_to(destination))],
+        "metadata_sources": [
+            str(validation_metadata_path.relative_to(destination)),
+            str(train_metadata_path.relative_to(destination)),
+            ALL_TRAIN_METADATA_URL,
+        ],
     }
     write_json(data_root() / "manifests" / "download_open_images_v7_negatives.json", result)
     return result

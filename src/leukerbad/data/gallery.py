@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw
 
 from .coco import index_coco, load_coco
 from .common import data_root, load_sources
-from .curate import _label_path, _read_classes
+from .yolo import label_path, read_classes
 
 TARGETS = {
     "positive": 30,
@@ -26,10 +26,10 @@ def overlay(source: dict, record: dict, output: Path) -> None:
     image_path = raw_dir / record["relative_path"]
     image = Image.open(image_path).convert("RGB")
     draw = ImageDraw.Draw(image)
-    classes = _read_classes(raw_dir)
-    label_path = _label_path(raw_dir, record["relative_path"])
-    if label_path:
-        for row in label_path.read_text(encoding="utf-8").splitlines():
+    classes = read_classes(raw_dir)
+    annotation_path = label_path(raw_dir, record["relative_path"])
+    if annotation_path:
+        for row in annotation_path.read_text(encoding="utf-8").splitlines():
             fields = row.split()
             if len(fields) != 5:
                 continue
@@ -92,10 +92,10 @@ def main() -> None:
         candidates = []
         for source, record in records:
             raw_dir = data_root().parent / source["raw_dir"]
-            label_path = _label_path(raw_dir, record["relative_path"])
+            annotation_path = label_path(raw_dir, record["relative_path"])
             object_count = (
-                sum(bool(line.strip()) for line in label_path.read_text(encoding="utf-8").splitlines())
-                if label_path
+                sum(bool(line.strip()) for line in annotation_path.read_text(encoding="utf-8").splitlines())
+                if annotation_path
                 else 0
             )
             labeled_candidate = (

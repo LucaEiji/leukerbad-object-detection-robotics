@@ -31,9 +31,14 @@ def render_report(sources: list[dict], inspected_at: str) -> str:
         audit_by_source = {
             item["source_id"]: item for item in json.loads(audit_path.read_text(encoding="utf-8"))["sources"]
         }
+
+    downloads = {}
+    for source in sources:
+        path = data_root() / "manifests" / f"download_{source['id']}.json"
+        downloads[source["id"]] = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
     for source in sources:
         classes = source.get("original_classes", "unknown")
-        version = source.get("version") or "unknown"
         if isinstance(classes, list):
             classes = ", ".join(classes)
         status = "requires credentials/terms verification"
@@ -41,15 +46,27 @@ def render_report(sources: list[dict], inspected_at: str) -> str:
             status = "public page; API key and exact version required for export"
         elif source["kind"] == "roboflow":
             status = "metadata verified; reuse permission unknown"
-        download_path = data_root() / "manifests" / f"download_{source['id']}.json"
-        download = json.loads(download_path.read_text(encoding="utf-8")) if download_path.exists() else {}
+        download = downloads[source["id"]]
         if download.get("status") == "downloaded":
             status = "downloaded; terms recorded"
+        elif source["kind"] == "open_images" and download:
+            status = f"{download.get('status', 'unknown')}: {download.get('downloaded', 0)}/{download.get('requested', source.get('target_images', '?'))} images"
         version = source.get("version") or download.get("version") or "unknown"
-        instances = audit_by_source.get(source["id"], {}).get("instances", "unknown")
+        instances = (
+            "n/a (image labels used for selection)"
+            if source["kind"] == "open_images"
+            else audit_by_source.get(source["id"], {}).get("instances", "unknown")
+        )
+        image_count = source.get("source_images", "unknown")
+        if source["kind"] == "open_images":
+            image_count = (
+                f"{download.get('downloaded', 0)}/{download.get('requested', source.get('target_images', '?'))} target"
+                if download
+                else f"0/{source.get('target_images', '?')} target"
+            )
         lines.append(
             f"| `{source['id']}` | [{source['url']}]({source['url']}) | "
-            f"{source.get('source_images', 'unknown')} | {instances} | {classes} | "
+            f"{image_count} | {instances} | {classes} | "
             f"{source.get('annotation_format', 'unknown')} | {source.get('license', 'unknown')} | {status} |"
         )
 
@@ -58,8 +75,7 @@ def render_report(sources: list[dict], inspected_at: str) -> str:
         classes = source.get("original_classes", "unknown")
         if isinstance(classes, list):
             classes = ", ".join(classes)
-        download_path = data_root() / "manifests" / f"download_{source['id']}.json"
-        download = json.loads(download_path.read_text(encoding="utf-8")) if download_path.exists() else {}
+        download = downloads[source["id"]]
         version = source.get("version") or download.get("version") or "unknown"
         lines.extend(
             [

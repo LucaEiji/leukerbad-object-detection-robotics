@@ -39,9 +39,9 @@ uv run pytest
 
 ## VapeGuard Data Pipeline
 
-The initial data pipeline covers source registration, raw downloads, source reporting, and
-image/annotation inventory. It does not train a model, create masks, curate labels, or control
-the robot.
+The data pipeline covers source registration, raw downloads, source reporting, inventory,
+curation review, annotation audit, and a single-class YOLO export. It does not train a model,
+create masks, or control the robot.
 
 Install the data tools:
 
@@ -62,12 +62,12 @@ Generate the source report:
 uv run vapeguard-inspect
 ```
 
-Download a specific Roboflow version only after verifying its license and metadata:
+Download the configured Roboflow version only after verifying its license and metadata:
 
 ```bash
 uv run vapeguard-download \
   --source-id roboflow_primary \
-  --roboflow-version 7 \
+  --roboflow-version 10 \
   --format yolov8
 ```
 
@@ -110,6 +110,11 @@ curated, annotation, and export contents are intentionally ignored by Git.
 Data lineage and cleanup rules are documented in
 `public_data/reports/transformations.md`. The current raw directories reflect the requested
 manual cleanup; the exclusion ledger is at `public_data/manifests/exclusions.jsonl`.
+
+The Open Images confuser subset currently contains 371 of the 600 target images. Its per-class
+counts, selection rules, attribution fields, and remaining limitations are documented in
+`public_data/reports/open_images_negatives.md`. Run `uv run vapeguard-openimages` to resume the
+download; it may need to scan large upstream label and metadata files.
 
 ## Standardized single-class YOLO data
 

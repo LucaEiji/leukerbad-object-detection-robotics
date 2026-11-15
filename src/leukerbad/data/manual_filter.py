@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from .common import data_root, utc_now
-from .curate import _read_classes
+from .yolo import read_classes
 
 REFERENCE_IMAGES = [
     "Screenshot-2024-04-03-190615_jpg.rf.43c331dafb47c594d85571a0c83a821a.jpg",
@@ -77,7 +77,7 @@ def _remove_pair(image_path: Path, reason: str, records: list[dict]) -> None:
 
 def filter_primary(records: list[dict]) -> None:
     raw_dir = data_root() / "raw" / "roboflow_primary"
-    classes = _read_classes(raw_dir)
+    classes = read_classes(raw_dir)
     for image_path in sorted(raw_dir.glob("*/images/*")):
         if not image_path.is_file():
             continue

@@ -9,12 +9,12 @@ from typing import Any
 
 from .coco import index_coco, load_coco
 from .common import data_root, load_sources, utc_now
-from .curate import _label_path, _read_classes
+from .yolo import label_path, read_classes
 
 
 def audit_source(source: dict[str, Any]) -> dict[str, Any]:
     raw_dir = data_root().parent / source["raw_dir"]
-    classes = _read_classes(raw_dir)
+    classes = read_classes(raw_dir)
     coco_index = {}
     coco_result = load_coco(raw_dir)
     if coco_result:
@@ -35,8 +35,8 @@ def audit_source(source: dict[str, Any]) -> dict[str, Any]:
     for line in inventory_path.read_text(encoding="utf-8").splitlines():
         image = json.loads(line)
         summary["images"] += 1
-        label_path = _label_path(raw_dir, image["relative_path"])
-        if not label_path and Path(image["relative_path"]).name in coco_index:
+        annotation_path = label_path(raw_dir, image["relative_path"])
+        if not annotation_path and Path(image["relative_path"]).name in coco_index:
             image_errors = []
             for annotation in coco_index[Path(image["relative_path"]).name]:
                 bbox = annotation.get("bbox", [])
@@ -63,14 +63,14 @@ def audit_source(source: dict[str, Any]) -> dict[str, Any]:
             else:
                 summary["valid_annotations"] += 1
             continue
-        if not label_path:
+        if not annotation_path:
             if coco_result:
                 summary["unannotated_images"] += 1
             else:
                 summary["errors"].append({"image": image["relative_path"], "error": "missing_label"})
             continue
         image_errors = []
-        for line_number, row in enumerate(label_path.read_text(encoding="utf-8").splitlines(), 1):
+        for line_number, row in enumerate(annotation_path.read_text(encoding="utf-8").splitlines(), 1):
             fields = row.split()
             if len(fields) != 5 and (len(fields) < 7 or (len(fields) - 1) % 2):
                 image_errors.append({"line": line_number, "error": "expected_five_yolo_fields"})

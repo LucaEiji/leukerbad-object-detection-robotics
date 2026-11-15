@@ -10,8 +10,8 @@ from PIL import Image
 
 from .coco import index_coco, load_coco
 from .common import data_root, load_sources, sha256_file, utc_now
+from .files import images as iter_images
 
-IMAGE_SUFFIXES = {".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
 ANNOTATION_SUFFIXES = {".json", ".txt", ".xml"}
 
 
@@ -50,9 +50,7 @@ def inventory_source(source: dict, root: Path) -> tuple[list[dict], dict]:
         if coco_result:
             coco_index = index_coco(coco_result[0])
             coco_file = str(coco_result[1].relative_to(source_dir))
-        for path in sorted(source_dir.rglob("*")):
-            if not path.is_file() or path.suffix.lower() not in IMAGE_SUFFIXES:
-                continue
+        for path in iter_images(source_dir):
             width, height, image_format = _image_info(path)
             annotation_candidates = _annotation_candidates(path)
             if path.name in coco_index and coco_file:
