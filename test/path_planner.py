@@ -281,10 +281,5 @@ def plot_plan(plan, path="plan_result.png"):
 
 
 if __name__ == "__main__":
-    am.ORIGIN_OVERRIDE = (0.18, 0.0, 0.07)       # exemple : origine à 18 cm de la base
-    am.connect(dry_run=True)
-    start = am.ik_xy(0.18, 0.0, 0.12)            # départ : au-dessus de l'origine, 12 cm de haut
-    plan = plan_pick(Puff(x_cm=5.0, y_cm=-4.0, z_cm=1.0, yaw_deg=30.0), start_joints=start)
-    print_plan(plan)
-    execute(plan)
-    plot_plan(plan)
+    print("Utilise run_robot.py pour exécuter un mouvement.")
+    print("Ce fichier sert à calculer les trajectoires.")

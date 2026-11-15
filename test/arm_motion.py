@@ -175,7 +175,7 @@ def fk_xy(joints):
 # Si tes SIGN/OFFSET ne sont pas encore fiables, mesure plutôt à la règle la position du bout
 # de la pince au repos dans le repère base (x0 devant l'axe de la base, y0 à gauche) et mets :
 #   ORIGIN_OVERRIDE = (x0, y0)
-ORIGIN_OVERRIDE = None
+ORIGIN_OVERRIDE = (0.10, 0.0, 0.02)
 
 # Sens des axes relatifs (mets -1 pour inverser un axe si besoin)
 AXIS_X_SIGN = 1.0
@@ -253,7 +253,7 @@ _state = dict(REST_POSE, **{"gripper.pos": GRIPPER_CLOSED})
 _dry_run = True
 
 
-def connect(dry_run=True):
+def connect(dry_run=False):
     """Connecte le bras (ou simule si dry_run=True : rien n'est envoyé au robot)."""
     global _robot, _state, _dry_run
     _dry_run = dry_run

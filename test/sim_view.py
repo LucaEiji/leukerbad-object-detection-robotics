@@ -38,9 +38,9 @@ FRAMES_PER_MOVE = 25
 # Positions de test (dx_cm, dy_cm) relatives à l'origine ; +dx = avant, +dy = gauche
 TESTS = [
     (0, 0),
-    (2, 0),
+    (5, 0),
     (0, 0),
-    (0, 2),
+    (0, 5),
     (0, 0),
 ]
 
