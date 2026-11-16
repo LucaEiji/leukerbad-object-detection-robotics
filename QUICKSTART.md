@@ -130,6 +130,10 @@ to a different view. Windows hardware has not been tested here.
 
 ## Windows JSON sharing
 
+`vision_state.json` is generated locally and must not be committed. If updating
+from a version that tracked it, stop vision and the robot, move that file to
+`vision_state.local-backup.json`, then run `git pull`. Vision recreates it on start.
+
 The writer retries temporary access-denied errors while replacing the complete
 JSON snapshot. A persistent lock logs a warning and skips that update; the camera
 continues. The robot reader closes the file after each read and retries temporary

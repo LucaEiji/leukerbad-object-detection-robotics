@@ -47,6 +47,7 @@ annotated*.png
 workspace.json
 workspace.json.bak
 target.json
+vision_state*.json
 lens.json
 
 # Share the checkpoint used by the demo; other models remain local.
